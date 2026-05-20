@@ -1,0 +1,14 @@
+1. ✅ no context implementation
+2. ✅ output result not changing on switching questions
+
+3. - i dont-know - for wrong output error is not coming
+4. ⏳ for custom input ---- before hand check if possible
+
+
+
+<!-- implement caching of results if code not changed -->
+onChange = setCode(prev=>{...prev});
+<!-- and on code change and again run code results changes -->
+<!-- so result only changes when run clicked and result will be cached unless -->
+<!-- cache result will only change when run clicked for that perticular oid -->
+<!-- useMemo(()=>runcode(),[code])  ... not used usememo here use ref is the best choice   -->

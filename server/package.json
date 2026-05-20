@@ -1,0 +1,44 @@
+{
+  "name": "server",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "build": "cross-env NODE_MODE='production' tsc",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "cross-env NODE_MODE='development' tsx watch src/index.ts",
+    "start": "cross-env NODE_MODE='production' node dist/index.js",
+    "seed": "dotenv -e .env.development -- tsx prisma/seed.ts"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "packageManager": "pnpm@10.29.3",
+  "dependencies": {
+    "@prisma/adapter-pg": "^7.8.0",
+    "@prisma/client": "^7.8.0",
+    "@types/dotenv": "^8.2.3",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.5.1",
+    "node-cache": "^5.1.2",
+    "typescript": "^6.0.3"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^25.6.0",
+    "@types/pg": "^8.20.0",
+    "@types/uuid": "^11.0.0",
+    "cross-env": "^10.1.0",
+    "pg": "^8.20.0",
+    "prisma": "^7.8.0",
+    "tsc-watch": "^7.2.0",
+    "tsx": "^4.21.0",
+    "uuid": "^14.0.0"
+  }
+}

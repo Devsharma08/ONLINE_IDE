@@ -1,0 +1,33 @@
+{
+  "compilerOptions": {
+    /* File Layout */
+    "rootDir": "./src",        // Tells tsc where your .ts files are
+    "outDir": "./dist",       // Matches your "start" and "dev" scripts 
+
+    /* Environment Settings */
+    "module": "esnext",
+    "target": "esnext",
+    "lib": ["esnext"],        // Essential for modern Node.js features
+    "types": ["node"],        // Connects to your @types/node dependency 
+    
+    /* Other Outputs */
+    "sourceMap": true,
+    "declaration": true,
+    "declarationMap": true,
+
+    /* Stricter Typechecking */
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+
+    /* Recommended Options */
+    "strict": true,
+    "jsx": "react-jsx",
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "noUncheckedSideEffectImports": true,
+    "moduleDetection": "force",
+    "skipLibCheck": true
+  },
+  "include": ["src/**/*"],    // Explicitly include your source folder
+  "exclude": ["node_modules", "dist"]
+}

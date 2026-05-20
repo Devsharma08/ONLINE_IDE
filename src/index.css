@@ -1,0 +1,26 @@
+@import "tailwindcss";
+
+
+   @theme{
+      --color-textwhite:#F9FAFB;
+      --color-textgray:#6B7280;
+      --color-textdimwhite: rgba(255,255,255,0.75);
+      --color-textlightwhite:#E5E7EB;
+   }
+
+   @theme{
+      --color-darkbg: #0F172A;
+      --color-secondarybg: #0F172A;
+      --color-tertiarybg: #0F172A;
+      --breakpoint-wxs:320px;
+      --breakpoint-wsm:384px;
+      --breakpoint-wmd:448px;
+      --breakpoint-wlg:512px;
+      --breakpoint-wxl:576px;
+      --breakpoint-w2xl:672px;
+      --breakpoint-w3xl:768px;
+      --breakpoint-w4xl:896px;
+      --breakpoint-w5xl:1024px;
+      --breakpoint-w6xl:1152px;
+      --breakpoint-w7xl:1280px;
+   }
