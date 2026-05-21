@@ -11,6 +11,10 @@ export type CodeContextType = {
     setTestCases: (testCases: TestCase[]) => void;
     activeFile: string;
     output: unknown;
+    customInput: string;
+    setCustomInput: (customInput: string) => void;
+    customInputActive: boolean;
+    setCustomInputActive: (active: boolean) => void;
     setActiveFile: (activeFile: string) => void;
     setOutput: (output: unknown) => void;
 }
@@ -24,6 +28,10 @@ export const CodeContext = createContext<CodeContextType>({
     setTestCases: () => {},
     activeFile: "",
     output: null,
+    customInput: "",
+    setCustomInput: () => {},
+    customInputActive: false,
+    setCustomInputActive: () => {},
     setActiveFile: () => {},
     setOutput: () => {},
 });

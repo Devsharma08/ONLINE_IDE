@@ -15,7 +15,7 @@ import {
    formatExecutionOutput,
 } from "../features/terminal/executionOutput";
 import { useTerminalLayout } from "../features/terminal/hooks/useTerminalLayout";
-import type { ExecutionMode, ExecutionResult, ProblemTestCase, SupportedLanguage } from "../features/terminal/types";
+import type { ExecutionMode, ExecutionResult, FileContentResponse, ProblemTestCase, SupportedLanguage } from "../features/terminal/types";
 
 const Terminal = () => {
    const [code, setCode] = useState<string>("");
@@ -26,12 +26,16 @@ const Terminal = () => {
    const [outputText, setOutputText] = useState<string>("");
    const [output, setOutput] = useState<ExecutionResult | null>(null);
    const [resLoading, setResponseLoading] = useState<boolean>(false);
+   const [customInput, setCustomInput] = useState<string>("");
+   const [customInputActive, setCustomInputActive] = useState<boolean>(false);
+   const [isCustomInputRun, setIsCustomInputRun] = useState<boolean>(false);
 
    // selection b/w output or test cases
    const [isOutputActive, setIsOutputActive] = useState<boolean>(true);
 
    // testcases
    const [testCases, setTestCases] = useState<ProblemTestCase[]>([]);
+   const [fileData, setFileData] = useState<FileContentResponse | null>(null);
 
    const {
       outputHeight,
@@ -47,7 +51,15 @@ const Terminal = () => {
    } = useContext(FileNamesContext);
 
    const { setStatus } = useContext(UserResponseContext);
-   const { setCode: setContextCode, setLanguage: setContextLanguage, setTestCases: setContextTestCases, setActiveFile: setContextActiveFile, setOutput: setContextOutput } = useContext(CodeContext);
+   const {
+      setCode: setContextCode,
+      setLanguage: setContextLanguage,
+      setTestCases: setContextTestCases,
+      setActiveFile: setContextActiveFile,
+      setOutput: setContextOutput,
+      setCustomInput: setContextCustomInput,
+      setCustomInputActive: setContextCustomInputActive,
+   } = useContext(CodeContext);
 
    const executeCache = useRef<Map<string, ExecutionResult>>(new Map());
 
@@ -60,11 +72,12 @@ const Terminal = () => {
       setActiveFile(oid);
 
       try {
-         const data = await fetchFileContent(oid);
-         const nextTestCases = buildProblemTestCases(data);
+         const fileContent = await fetchFileContent(oid);
+         const nextTestCases = buildProblemTestCases(fileContent);
          const nextLanguage = detectLanguageFromFileName(name);
-         const nextCode = data.content || "";
+         const nextCode = fileContent.content || "";
 
+         setFileData(fileContent);
          setTestCases(nextTestCases);
          setLanguage(nextLanguage);
          setCode(nextCode);
@@ -72,19 +85,28 @@ const Terminal = () => {
          setContextLanguage(nextLanguage);
          setContextTestCases(nextTestCases);
          setContextActiveFile(oid);
+         setCustomInput("");
+         setContextCustomInput("");
+         setCustomInputActive(false);
+         setContextCustomInputActive(false);
+         setIsCustomInputRun(false);
       } catch {
+         setFileData(null);
          setCode("error some thing wen't wrong");
          setStatus("ERROR");
       }
       finally {
          setLoading(false);
       }
-   }, [setContextActiveFile, setContextCode, setContextLanguage, setContextOutput, setContextTestCases, setStatus]);
+   }, [setContextActiveFile, setContextCode, setContextCustomInput, setContextCustomInputActive, setContextLanguage, setContextOutput, setContextTestCases, setIsCustomInputRun, setStatus]);
 
 
    // function to run the code 
    const handleRunCode = useCallback(async (nextCode: string, nextLanguage: SupportedLanguage, oid: string, mode: ExecutionMode = "RUN") => {
-      const cacheKey = `${oid}-${nextLanguage}-${mode}-${nextCode}`;
+      const customInputValue = customInputActive ? customInput.trim() : "";
+      const isCustomExecution = customInputValue.length > 0;
+      setIsCustomInputRun(isCustomExecution);
+      const cacheKey = `${oid}-${nextLanguage}-${mode}-${nextCode}-${customInputValue}`;
       const cached = executeCache.current.get(cacheKey);
       if (cached) {
          setOutput(cached);
@@ -99,7 +121,7 @@ const Terminal = () => {
       setStatus("LOADING");
 
       try {
-         const data = await executeCode({ code: nextCode, language: nextLanguage, oid, mode });
+         const data = await executeCode({ code: nextCode, language: nextLanguage, oid, mode, customInput: customInputValue });
          executeCache.current.set(cacheKey, data);
          setOutput(data);
          setContextOutput(data);
@@ -113,8 +135,13 @@ const Terminal = () => {
       } finally {
          setIsExecuting(false);
          setResponseLoading(false);
+         setCustomInput("");
+         setContextCustomInput("");
+         if (!isCustomExecution) {
+            setIsCustomInputRun(false);
+         }
       }
-   }, [setContextOutput, setStatus]);
+   }, [customInput, customInputActive, setContextOutput, setContextCustomInput, setIsCustomInputRun, setStatus]);
 
    // function to fetch file names
    const handleFetchFileNames = useCallback(async () => {
@@ -140,21 +167,27 @@ const Terminal = () => {
 
 
    return (
-      <>
-         <div className='flex h-screen bg-[#1e1e1e] text-white pt-16'>
-            <FileExplorer
-               activeFile={activeFile}
-               files={filesData}
-               onFileClick={handleFileClick}
-               onResizeStart={startSidebarDragging}
-               sidebarWidth={sidebarWidth}
-            />
+      <div className='flex h-screen min-h-screen bg-[#1e1e1e] text-white'>
+         <FileExplorer
+            activeFile={activeFile}
+            files={filesData}
+            fileData={fileData}
+            language={language}
+            testCaseCount={testCases.length}
+            onFileClick={handleFileClick}
+            onResizeStart={startSidebarDragging}
+            sidebarWidth={sidebarWidth}
+         />
 
-            {/* monaco editor area */}
-            <main className='relative flex-1 flex flex-col min-h-0 bg-[#1e1e1e]'>
+         <main className='flex-1 flex flex-col min-h-0'>
+            <div className="w-full bg-[#151515] border-b border-white/10 px-4 py-2 text-sm text-slate-300">
+               <span className="font-medium">Terminal Workspace</span>
+            </div>
+
+            <div className='flex-1 min-h-0 relative'>
                {loading && <LoadingOverlay />}
 
-               <div className='flex-1 flex flex-col min-h-0'>
+               <div className='absolute inset-0 flex flex-col min-h-0'>
                   {activeFile ? (
                      <>
                         <EditorToolbar
@@ -164,35 +197,41 @@ const Terminal = () => {
                            onSubmit={() => void handleRunCode(code, language, activeFile, "SUBMIT")}
                         />
 
-                        <div className="flex-1 relative min-h-0">
-                           <MonacoIDE
-                              handleRunCode={handleRunCode}
-                              language={language}
-                              code={code}
-                              oid={activeFile}
-                              onCodeChange={handleCodeChange}
+                        <div className='flex-1 min-h-0 grid' style={{ gridTemplateRows: "minmax(0, 1fr) auto" }}>
+                           <div className="min-h-0 overflow-hidden">
+                              <MonacoIDE
+                                 handleRunCode={handleRunCode}
+                                 language={language}
+                                 code={code}
+                                 oid={activeFile}
+                                 onCodeChange={handleCodeChange}
+                              />
+                           </div>
+
+                           <OutputPanel
+                              isExecuting={isExecuting}
+                              isOutputActive={isOutputActive}
+                              output={output}
+                              outputHeight={outputHeight}
+                              outputText={outputText}
+                              testCases={testCases}
+                              customInput={customInput}
+                              customInputActive={customInputActive}
+                              isCustomInputRun={isCustomInputRun}
+                              setCustomInput={setCustomInput}
+                              setCustomInputActive={setCustomInputActive}
+                              onResizeStart={startOutputDragging}
+                              setIsOutputActive={setIsOutputActive}
                            />
                         </div>
-
-                        <OutputPanel
-                           isExecuting={isExecuting}
-                           isOutputActive={isOutputActive}
-                           output={output}
-                           outputHeight={outputHeight}
-                           outputText={outputText}
-                           testCases={testCases}
-                           onResizeStart={startOutputDragging}
-                           setIsOutputActive={setIsOutputActive}
-                        />
                      </>
                   ) : (
                      <EmptyTerminalState />
                   )}
                </div>
-            </main>
-
-         </div>
-      </>
+            </div>
+         </main>
+      </div>
    );
 
 }

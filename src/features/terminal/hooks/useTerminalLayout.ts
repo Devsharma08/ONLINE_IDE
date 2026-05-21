@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useState, type MouseEvent } from "react";
+import { useCallback, useEffect, useState, useRef, type MouseEvent } from "react";
 
 export const useTerminalLayout = () => {
   const [sidebarWidth, setSidebarWidth] = useState(260);
   const [isSidebarDragging, setIsSidebarDragging] = useState(false);
   const [outputHeight, setOutputHeight] = useState(250);
   const [isOutputDragging, setIsOutputDragging] = useState(false);
+  const startDragY = useRef<number | null>(null);
+  const startOutputHeight = useRef<number | null>(null);
 
   const startSidebarDragging = useCallback((event: MouseEvent<HTMLDivElement>) => {
     setIsSidebarDragging(true);
@@ -14,11 +16,13 @@ export const useTerminalLayout = () => {
   }, []);
 
   const startOutputDragging = useCallback((event: MouseEvent<HTMLDivElement>) => {
+    startDragY.current = event.clientY;
+    startOutputHeight.current = outputHeight;
     setIsOutputDragging(true);
     event.preventDefault();
     document.body.style.userSelect = "none";
     document.body.style.cursor = "row-resize";
-  }, []);
+  }, [outputHeight]);
 
   useEffect(() => {
     const handleMouseMove = (event: globalThis.MouseEvent) => {
@@ -51,8 +55,11 @@ export const useTerminalLayout = () => {
       if (!isOutputDragging) return;
 
       window.requestAnimationFrame(() => {
-        const nextHeight = window.innerHeight - event.clientY;
-        setOutputHeight(Math.max(40, Math.min(nextHeight, window.innerHeight - 100)));
+        const startY = startDragY.current ?? event.clientY;
+        const startH = startOutputHeight.current ?? outputHeight;
+        const delta = startY - event.clientY; // drag up => positive
+        const nextHeight = Math.max(40, Math.min(startH + delta, Math.floor(window.innerHeight * 0.6)));
+        setOutputHeight(nextHeight);
       });
     };
 
@@ -71,7 +78,7 @@ export const useTerminalLayout = () => {
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("mouseup", handleMouseUp);
     };
-  }, [isOutputDragging]);
+  }, [isOutputDragging, outputHeight]);
 
   return {
     outputHeight,

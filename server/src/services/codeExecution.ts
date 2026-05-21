@@ -14,6 +14,7 @@ type ExecuteBody = {
   language?: unknown;
   oid?: unknown;
   mode?: unknown;
+  customInput?: unknown;
 };
 
 type TestCaseRecord = {
@@ -115,11 +116,13 @@ const buildDockerCommand = ({
 };
 
 export const executeCode = async (req: Request, res: Response) => {
-  const { code, language, oid, mode } = req.body as ExecuteBody;
+  const { code, language, oid, mode, customInput } = req.body as ExecuteBody;
   const sourceCode = typeof code === "string" ? code : "";
   const githubOid = typeof oid === "string" ? oid : "";
   const executionMode = getExecutionMode(mode);
   const executionLanguage = getLanguage(language);
+  const customInputValue = typeof customInput === "string" ? customInput.trim() : "";
+  const useCustomInput = customInputValue.length > 0;
   const jobId = uuidv4();
   const tempDir = path.join(process.cwd(), "temp", jobId);
 
@@ -137,8 +140,9 @@ export const executeCode = async (req: Request, res: Response) => {
     const testCases = (fileData?.test_cases ?? []) as TestCaseRecord[];
     const codeSnippets = (fileData?.code_snippets ?? []) as CodeSnippetRecord[];
     const wrapperCode = codeSnippets.find((snippet) => snippet.language === executionLanguage)?.wrapperCode ?? "";
-    const casesToRun =
-      testCases.length === 0
+    const casesToRun = useCustomInput
+      ? [{ input: customInputValue, expectedOutput: "" }]
+      : testCases.length === 0
         ? [{ input: "", expectedOutput: "" }]
         : executionMode === "SUBMIT"
           ? testCases
@@ -210,8 +214,8 @@ export const executeCode = async (req: Request, res: Response) => {
       mode: executionMode,
       totalCases: casesToRun.length,
       passedCases: totalPassed,
-      status: totalPassed === casesToRun.length ? "PASSED" : "FAILED",
-      problemId: testCases[0]?.problemId || "",
+      status: useCustomInput ? "COMPLETED" : totalPassed === casesToRun.length ? "PASSED" : "FAILED",
+      problemId: useCustomInput ? "" : testCases[0]?.problemId || "",
       details: results,
     });
   } catch (error) {

@@ -49,4 +49,5 @@ export type ExecuteCodeRequest = {
   language: SupportedLanguage;
   oid: string;
   mode: ExecutionMode;
+  customInput?: string;
 };

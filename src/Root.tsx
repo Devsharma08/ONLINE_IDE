@@ -17,6 +17,8 @@ const Root = () => {
   const [testCases, setTestCases] = useState<TestCase[]>([])
   const [activeFile, setActiveFile] = useState('')
   const [output, setOutput] = useState<unknown>(null)
+  const [customInput, setCustomInput] = useState('')
+  const [customInputActive, setCustomInputActive] = useState(false)
 
   // response context states
   const [responseContent, setResponseContent] = useState('')
@@ -46,6 +48,10 @@ const Root = () => {
                         setActiveFile,
                         output,
                         setOutput,
+                        customInput,
+                        setCustomInput,
+                        customInputActive,
+                        setCustomInputActive,
                       }}
                     >
                       <UserResponseContext.Provider
