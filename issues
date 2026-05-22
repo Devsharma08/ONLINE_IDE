@@ -31,3 +31,4 @@ Docker Streams: Instead of execAsync, your backend must spawn the Docker contain
 Xterm.js: A frontend library that renders a real, working terminal window in the browser.
 
 When the user types a key in the browser terminal, Socket.io sends that character to the backend, which pipes it straight into the running Docker container's stdin.
+

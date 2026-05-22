@@ -1,4 +1,4 @@
-export type SupportedLanguage = "javascript" | "java";
+export type SupportedLanguage = "javascript" | "java" | "";
 
 export type ExecutionMode = "RUN" | "SUBMIT";
 

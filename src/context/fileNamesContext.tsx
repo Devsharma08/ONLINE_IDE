@@ -6,6 +6,7 @@ export type FileEntry = {
     downloadUrl?: string;
     type?: string;
     path?: string;
+    isLocal?: boolean;
 }
 
 export type FileNamesContextType = {
