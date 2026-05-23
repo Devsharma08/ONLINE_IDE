@@ -1,13 +1,16 @@
-import { MenuIcon, Terminal, IdCardLanyard } from 'lucide-react'
+import { useState } from 'react'
+import { MenuIcon, Terminal, IdCardLanyard, X } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { UseHeadroom } from '../utils/styles/headRoom'
 
 const Header = () => {
    const direction = UseHeadroom();
+   const [isMenuOpen, setIsMenuOpen] = useState(false);
+
   return (
     <nav className={`fixed top-0 right-0 left-0  z-50 glass-dark glass-rim backdrop-blur-md backdrop-saturate-150 py-4 px-6 w-full shadow-sm shadow-white/5 bg-darkbg/60 border-b border-white/10 transition-transform duration-100 ${direction === 'down' ? '-translate-y-full' : 'translate-y-0'}`}>
       <div className='flex items-center max-w-7xl mx-auto font-bold justify-between'>
-         <Link to="/" className='flex items-center gap-3 group'>
+         <Link to="/" onClick={() => setIsMenuOpen(false)} className='flex items-center gap-3 group'>
             <div className='bg-gradient-to-br from-indigo-500 to-purple-600 p-2 rounded-xl group-hover:shadow-[0_0_15px_rgba(168,85,247,0.5)] transition-all duration-300'>
                <Terminal className='w-5 h-5 text-textwhite' />
             </div>
@@ -22,10 +25,26 @@ const Header = () => {
                <span>GitHub</span>
             </a>
          </div>
-         <div className='wmd:hidden block p-2 rounded-lg bg-white/5 border border-white/10 text-textwhite cursor-pointer hover:bg-white/10 transition-all'>
-            <MenuIcon className='w-5 h-5'/>
-         </div>
+         <button
+            type="button"
+            aria-label={isMenuOpen ? "Close navigation menu" : "Open navigation menu"}
+            aria-expanded={isMenuOpen}
+            onClick={() => setIsMenuOpen((open) => !open)}
+            className='wmd:hidden block p-2 rounded-lg bg-white/5 border border-white/10 text-textwhite cursor-pointer hover:bg-white/10 transition-all'
+         >
+            {isMenuOpen ? <X className='w-5 h-5'/> : <MenuIcon className='w-5 h-5'/>}
+         </button>
       </div>
+      {isMenuOpen ? (
+         <div className="wmd:hidden mx-auto mt-4 grid max-w-7xl gap-2 border-t border-white/10 pt-4 text-sm font-medium">
+            <Link to="/terminal" onClick={() => setIsMenuOpen(false)} className='rounded-lg px-3 py-3 text-textdimwhite hover:bg-white/5 hover:text-textwhite transition-colors duration-200'>Terminal</Link>
+            <Link to="/about" onClick={() => setIsMenuOpen(false)} className='rounded-lg px-3 py-3 text-textdimwhite hover:bg-white/5 hover:text-textwhite transition-colors duration-200'>About</Link>
+            <a href="https://github.com/Devsharma08/DSA-LEETCODE" target="_blank" rel="noreferrer" className='flex items-center gap-2 rounded-lg px-3 py-3 text-textdimwhite hover:bg-white/5 hover:text-textwhite transition-colors duration-200'>
+               <IdCardLanyard className='w-4 h-4' />
+               <span>GitHub</span>
+            </a>
+         </div>
+      ) : null}
     </nav>
   )
 }

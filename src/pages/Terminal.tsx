@@ -17,12 +17,30 @@ import {
 import { useTerminalLayout } from "../features/terminal/hooks/useTerminalLayout";
 import type { ExecutionMode, ExecutionResult, FileContentResponse, ProblemTestCase, SupportedLanguage } from "../features/terminal/types";
 
+const LOCAL_FILE_ID_PREFIX = "local-";
+const LOCAL_FILE_STORAGE_PREFIX = "localFile:";
+
+const getLocalStorageKey = (oid: string) => `${LOCAL_FILE_STORAGE_PREFIX}${oid}`;
+const isLocalFile = (oid: string | null): boolean => Boolean(oid && oid.startsWith(LOCAL_FILE_ID_PREFIX));
+
+const readLocalFile = (oid: string) => {
+   const raw = localStorage.getItem(getLocalStorageKey(oid));
+   if (!raw) return null;
+   try {
+      return JSON.parse(raw) as { name: string; content: string; language: SupportedLanguage; createdAt: number; updatedAt: number };
+   } catch {
+      return null;
+   }
+};
+
 const Terminal = () => {
    const [code, setCode] = useState<string>("");
    const [language, setLanguage] = useState<SupportedLanguage>("");
    const [loading, setLoading] = useState<boolean>(false);
+   const [filesLoading, setFilesLoading] = useState<boolean>(true);
    const [activeFile, setActiveFile] = useState<string | null>(null);
    const [isExecuting, setIsExecuting] = useState(false);
+   const [executingMode, setExecutingMode] = useState<ExecutionMode | null>(null);
    const [outputText, setOutputText] = useState<string>("");
    const [output, setOutput] = useState<ExecutionResult | null>(null);
    const [resLoading, setResponseLoading] = useState<boolean>(false);
@@ -66,21 +84,11 @@ const Terminal = () => {
    } = useContext(CodeContext);
 
    const executeCache = useRef<Map<string, ExecutionResult>>(new Map());
-   const LOCAL_FILE_ID_PREFIX = "local-";
-   const LOCAL_FILE_STORAGE_PREFIX = "localFile:";
+   const formatEditorRef = useRef<(() => void) | null>(null);
 
-   const getLocalStorageKey = (oid: string) => `${LOCAL_FILE_STORAGE_PREFIX}${oid}`;
-   const isLocalFile = (oid: string | null): boolean => Boolean(oid && oid.startsWith(LOCAL_FILE_ID_PREFIX));
-
-   const readLocalFile = (oid: string) => {
-      const raw = localStorage.getItem(getLocalStorageKey(oid));
-      if (!raw) return null;
-      try {
-         return JSON.parse(raw) as { name: string; content: string; language: SupportedLanguage; createdAt: number; updatedAt: number };
-      } catch {
-         return null;
-      }
-   };
+   const handleFormatCode = useCallback(() => {
+      formatEditorRef.current?.();
+   }, []);
 
    const saveLocalFileContent = useCallback((oid: string, content: string) => {
       const existing = readLocalFile(oid);
@@ -100,8 +108,8 @@ const Terminal = () => {
       setOutput(null);
       setOutputText("");
       setContextOutput(null);
-      setLoading(true);
       setActiveFile(oid);
+      setLoading(!isLocalFile(oid));
 
       if (isLocalFile(oid)) {
          const localFile = readLocalFile(oid);
@@ -178,6 +186,7 @@ const Terminal = () => {
 
       setResponseLoading(true);
       setIsExecuting(true);
+      setExecutingMode(mode);
       setStatus("LOADING");
 
       try {
@@ -194,6 +203,7 @@ const Terminal = () => {
          setStatus("ERROR");
       } finally {
          setIsExecuting(false);
+         setExecutingMode(null);
          setResponseLoading(false);
          setCustomInput("");
          setContextCustomInput("");
@@ -202,6 +212,8 @@ const Terminal = () => {
          }
       }
    }, [customInput, customInputActive, setContextOutput, setContextCustomInput, setIsCustomInputRun, setStatus]);
+
+   // console.log("fileData", fileNamesData);
 
    const loadLocalFiles = useCallback(() => {
       const localFiles: FileEntry[] = [];
@@ -228,22 +240,42 @@ const Terminal = () => {
       return localFiles;
    }, []);
 
-   // function to fetch file names
-   const handleFetchFileNames = useCallback(async () => {
-      const localFiles = loadLocalFiles();
-      try {
-         const data = await fetchFileNames();
-         setFilesData([...localFiles, ...data]);
-         setStatus("SUCCESS");
-      } catch {
+   useEffect(() => {
+      let cancelled = false;
+
+      const loadFileNames = async () => {
+         await Promise.resolve();
+         const localFiles = loadLocalFiles();
+         if (cancelled) return;
+
+         setFilesLoading(true);
          setFilesData(localFiles);
-         setStatus("ERROR");
-      }
+         setStatus("LOADING");
+
+         try {
+            const data = await fetchFileNames();
+            if (cancelled) return;
+            setFilesData([...localFiles, ...data]);
+            setStatus("SUCCESS");
+         } catch {
+            if (cancelled) return;
+            setFilesData(localFiles);
+            setStatus("ERROR");
+         } finally {
+            if (!cancelled) {
+               setFilesLoading(false);
+            }
+         }
+      };
+
+      void loadFileNames();
+
+      return () => {
+         cancelled = true;
+      };
    }, [loadLocalFiles, setFilesData, setStatus]);
 
-   useEffect(() => {
-      void handleFetchFileNames();
-   }, [handleFetchFileNames]);
+   console.log("filesData", filesData);
 
    const handleCodeChange = useCallback((nextCode: string) => {
       setCode(nextCode);
@@ -310,7 +342,7 @@ const Terminal = () => {
    };
 
    return (
-      <div className='flex h-screen min-h-screen bg-[#1e1e1e] text-white'>
+      <div className='flex h-[100dvh] min-h-screen flex-col overflow-hidden bg-[#1e1e1e] text-white md:flex-row'>
          <FileExplorer
             activeFile={activeFile}
             files={filesData}
@@ -321,29 +353,34 @@ const Terminal = () => {
             onResizeStart={startSidebarDragging}
             sidebarWidth={sidebarWidth}
             onCreateFile={handleCreateLocalFile}
+            isLoadingFiles={filesLoading}
             selectedMode={selectedMode}
             setSelectedMode={setSelectedMode}
          />
 
-         <main className='flex-1 flex flex-col min-h-0'>
-            <div className="w-full bg-[#151515] border-b border-white/10 px-4 py-2 text-sm text-slate-300">
+         <main className='flex min-h-0 min-w-0 flex-1 flex-col'>
+            <div className="flex w-full items-center justify-between gap-3 border-b border-white/10 bg-[#151515] px-3 py-2 text-xs text-slate-300 sm:px-4 sm:text-sm">
                <span className="font-medium">Terminal Workspace</span>
+               <span className="truncate text-slate-500">{filesLoading ? "Syncing files..." : activeFileName}</span>
             </div>
 
             <div className='flex-1 min-h-0 relative'>
-               {loading && <LoadingOverlay />}
+               {loading && <LoadingOverlay label="Loading file content..." />}
 
                <div className='absolute inset-0 flex flex-col min-h-0'>
-                  {!!activeFile ? (
+                  {activeFile ? (
                      <>
                         <EditorToolbar
                            activeFile={activeFile}
                            disabled={resLoading}
+                           executingMode={executingMode}
                            language={language}
                            setLanguage={setLanguage}
+                           setCode={setCode}
                            fileName={activeFileName}
                            onRun={() => void handleRunCode(code, language, activeFile, "RUN")}
                            onSubmit={() => void handleRunCode(code, language, activeFile, "SUBMIT")}
+                           onFormat={handleFormatCode}
                         />
 
                         <div className='flex-1 min-h-0 grid' style={{ gridTemplateRows: "minmax(0, 1fr) auto" }}>
@@ -354,6 +391,9 @@ const Terminal = () => {
                                  code={code}
                                  oid={activeFile}
                                  onCodeChange={handleCodeChange}
+                                 onFormatMount={(formatAction) => {
+                                    formatEditorRef.current = formatAction;
+                                 }}
                               />
                            </div>
 

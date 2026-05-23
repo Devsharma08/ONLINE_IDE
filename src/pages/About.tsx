@@ -2,25 +2,25 @@ import { Info, IceCream as Github, User, Heart } from 'lucide-react'
 
 const About = () => {
   return (
-    <section className="flex flex-col items-center pt-24 px-6 relative overflow-hidden h-full">
+    <section className="relative flex h-full flex-col items-center overflow-hidden px-4 pt-24 sm:px-6">
 
-      <div className="max-w-4xl w-full flex flex-col items-center text-center z-10 mb-16">
+      <div className="z-10 mb-12 flex w-full max-w-4xl flex-col items-center text-center sm:mb-16">
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-sm text-indigo-300 mb-6 backdrop-blur-sm shadow-[0_0_15px_rgba(255,255,255,0.05)] cursor-default">
           <Info className="w-4 h-4" />
           About This Project
         </div>
         
-        <h1 className="text-4xl md:text-6xl font-bold tracking-tight text-textwhite mb-6">
+        <h1 className="mb-6 text-3xl font-bold tracking-tight text-textwhite sm:text-4xl md:text-6xl">
           Bridging the Gap Between <br/>
           <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-500">Learning & Doing</span>
         </h1>
         
-        <p className="text-lg text-textdimwhite max-w-2xl leading-relaxed">
+        <p className="max-w-2xl text-base leading-relaxed text-textdimwhite sm:text-lg">
           DSAHub is an open-source platform designed to make exploring Data Structures and Algorithms seamless. By connecting directly to GitHub, it provides a real-time, cached, and interactive way to study code.
         </p>
       </div>
 
-      <div className="w-full max-w-3xl bg-white/[0.02] border border-white/10 rounded-3xl p-8 md:p-12 backdrop-blur-md z-10 relative shadow-2xl">
+      <div className="relative z-10 w-full max-w-3xl rounded-2xl border border-white/10 bg-white/[0.02] p-5 shadow-2xl backdrop-blur-md sm:p-8 md:p-12">
         <div className="absolute inset-0 bg-gradient-to-b from-white/[0.05] to-transparent rounded-3xl pointer-events-none" />
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-10 relative z-10">

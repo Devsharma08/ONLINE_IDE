@@ -19,7 +19,7 @@ type OutputPanelProps = {
 };
 
 const getTabClassName = (isActive: boolean) =>
-  `mx-2 bg-indigo-500/10 cursor-pointer active:scale-95 transition-transform duration-100 font-semibold border-2 px-2 rounded-sm uppercase ${
+  `cursor-pointer rounded-md border px-2 py-1 text-xs font-semibold uppercase transition-transform duration-100 active:scale-95 ${
     isActive ? "text-indigo-400 border-indigo-500" : "text-slate-500 border-white/10"
   }`;
 
@@ -53,11 +53,11 @@ const OutputPanel = ({
         className="w-full h-1.5 hover:bg-indigo-500/50 cursor-row-resize transition-colors z-10"
       />
       <div
-        style={{ height: `${outputHeight}px`, maxHeight: "60vh" }}
-        className="flex-none bg-[#1e1e1e] border-t border-white/10 p-4 font-mono [&::-webkit-scrollbar]:[width:6px] [&::-webkit-scrollbar-track]:bg-gray-600  [&::-webkit-scrollbar-thumb]:bg-gray-300 overflow-y-auto"
+        style={{ height: `${outputHeight}px`, maxHeight: "min(60vh, 520px)" }}
+        className="flex-none overflow-y-auto border-t border-white/10 bg-[#1e1e1e] p-3 font-mono [&::-webkit-scrollbar]:[width:6px] [&::-webkit-scrollbar-track]:bg-gray-600 [&::-webkit-scrollbar-thumb]:bg-gray-300 sm:p-4"
       >
-        <div className="text-slate-500 text-md mb-2 border-b border-white/10 pb-1 flex justify-between items-center">
-        <div>
+        <div className="mb-3 flex flex-col gap-3 border-b border-white/10 pb-2 text-slate-500 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-wrap gap-2">
           <button onClick={() => setIsOutputActive(true)} className={getTabClassName(isOutputActive)}>
             Output
           </button>
@@ -67,17 +67,17 @@ const OutputPanel = ({
         </div>
           {/* button for custom input */}
         {isOutputActive ? (
-          <div className="text-xs text-slate-400 space-x-2 flex items-center">
-            <span>Check for custom input</span>
+          <label className="flex w-fit cursor-pointer items-center gap-2 rounded-md border border-white/10 bg-white/[0.03] px-2 py-1 text-xs text-slate-400">
+            <span>Custom input</span>
             <input 
               type="checkbox" 
-              className="px-2 py-1 border border-white/10 rounded hover:bg-white/10 active:bg-white/20 transition-colors" 
+              className="h-4 w-4 accent-indigo-500" 
               placeholder="Custom Input" 
               title="click for custom input" 
               checked={customInputActive}
               onChange={() => setCustomInputActive(!customInputActive)}
             />
-          </div>
+          </label>
         ) : null}
         </div>
 
@@ -87,7 +87,7 @@ const OutputPanel = ({
               value={customInput}
               title="Enter custom input for your code here."
               onChange={(e) => setCustomInput(e.target.value)}
-              className="bg-[#2d2d2d] [&&::-webkit-scrollbar]:[width:6px] [&&::-webkit-scrollbar-track]:bg-gray-600 [&&::-webkit-scrollbar-thumb]:bg-gray-300 text-slate-400 px-2 placeholder:text-slate-500 h-fit border border-white/10 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="h-fit rounded border border-white/10 bg-[#2d2d2d] px-2 py-2 text-sm text-slate-300 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 [&&::-webkit-scrollbar]:[width:6px] [&&::-webkit-scrollbar-track]:bg-gray-600 [&&::-webkit-scrollbar-thumb]:bg-gray-300"
               placeholder={`Enter raw stdin exactly as your code reads it.
 Examples:
 - Single value: 5
@@ -108,7 +108,7 @@ Examples:
             <span>Executing...</span>
           </div>
         ) : isOutputActive  ? (
-          <pre className="whitespace-pre-wrap text-gray-300">
+          <pre className="max-w-full overflow-x-auto whitespace-pre-wrap break-words text-sm text-gray-300">
             {outputText || "// Output will appear here after running the code"}
           </pre>
         ) : (
@@ -131,16 +131,16 @@ Examples:
 
                 return (
                   <div key={`${item.input}-${index}`} className={`output flex border-2 flex-col p-3 rounded-md gap-2 ${borderClassName}`}>
-                    <p className="border border-white/10 text-start rounded-sm p-1.5 text-sm font-medium bg-white/5">
+                    <p className="break-words rounded-sm border border-white/10 bg-white/5 p-1.5 text-start text-sm font-medium">
                       <span className="text-slate-400 font-semibold">Input:</span> {item.input}
                     </p>
-                    <p className="text-sm font-medium">
+                    <p className="break-words text-sm font-medium">
                       <span className="text-slate-400 font-semibold">Expected Output:</span> {item.expectedOutput}
                     </p>
 
                     {match && (
                       <>
-                        <p className="text-sm font-medium">
+                        <p className="break-words text-sm font-medium">
                           <span className="text-slate-400 font-semibold">Actual Output:</span>{" "}
                           <span className={match.passed ? "text-green-400" : "text-red-400"}>
                             {match.output || (match.runtimeError ? "Error" : "empty")}

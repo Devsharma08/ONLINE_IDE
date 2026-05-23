@@ -1,5 +1,6 @@
-import { useEffect, useRef } from "react";
-import Editor, { type OnMount } from "@monaco-editor/react";
+import { useRef, useEffect } from "react";
+import Editor, { type OnMount, type Monaco } from "@monaco-editor/react";
+import { Loader2 } from "lucide-react";
 import type { ExecutionMode, SupportedLanguage } from "../types";
 
 type EditorInstance = Parameters<OnMount>[0];
@@ -15,110 +16,183 @@ type MonacoIDEProps = {
     mode?: ExecutionMode,
   ) => Promise<void> | void;
   onCodeChange: (code: string) => void;
+  onFormatMount?: (formatAction: () => void) => void;
 };
 
-const MonacoIDE = ({ handleRunCode, language, code, oid, onCodeChange }: MonacoIDEProps) => {
+const JAVA_BOILERPLATE = [
+  "import java.util.*;",
+  "import java.io.*;",
+  "import java.math.*;",
+  "",
+  "class Solution {",
+  "    public static void main(String[] args) {",
+  "// --- DO NOT ALTER ABOVE THIS LINE ---",
+  "        // Your code here",
+  "    }",
+  "}",
+].join("\n");
+
+const MonacoIDE = ({ handleRunCode, language, code, oid, onCodeChange, onFormatMount }: MonacoIDEProps) => {
   const editorRef = useRef<EditorInstance | null>(null);
+  const monacoRef = useRef<Monaco | null>(null);
+  const decorationsRef = useRef<string[]>([]); // Prevents visual decoration memory leaks
+  const propsRef = useRef({ handleRunCode, language, oid });
+
+  useEffect(() => {
+    propsRef.current = { handleRunCode, language, oid };
+  }, [handleRunCode, language, oid]);
+
+  const applyJavaDecorations = (editor: EditorInstance, monaco: Monaco) => {
+    decorationsRef.current = editor.deltaDecorations(decorationsRef.current, [
+      {
+        range: new monaco.Range(1, 1, 7, 1),
+        options: {
+          isWholeLine: true,
+          className: "bg-white/[0.02] opacity-60 select-none",
+          glyphMarginClassName: "opacity-40",
+        },
+      },
+    ]);
+  };
+
+  const configureEditorThemes = (monaco: Monaco) => {
+    monaco.editor.defineTheme("dark-theme", {
+      base: "vs-dark",
+      inherit: true,
+      rules: [
+        { token: "comment", foreground: "6b7280", fontStyle: "italic" },
+        { token: "keyword", foreground: "82aaff", fontStyle: "bold" },
+        { token: "keyword.operator", foreground: "f5c24d" },
+        { token: "number", foreground: "f78c6c" },
+        { token: "string", foreground: "c3e88d" },
+        { token: "delimiter.bracket", foreground: "c792ea" },
+        { token: "type", foreground: "7fdbca" },
+        { token: "class", foreground: "ffcb6b", fontStyle: "bold" },
+        { token: "variable", foreground: "d6deeb" },
+        { token: "function", foreground: "82cfff" },
+      ],
+      colors: {
+        "editor.background": "#01050f",
+        "editor.foreground": "#d6deeb",
+        "editorLineNumber.foreground": "#3b424e",
+        "editorLineNumber.activeForeground": "#88c0d0",
+        "editorCursor.foreground": "#7fdbca",
+        "editor.selectionBackground": "#334e68",
+        "editorLineHighlightBackground": "#112131",
+      },
+    });
+
+    // Custom Formatting Provider for Java Code Spacing Alignment
+    monaco.languages.registerDocumentFormattingEditProvider("java", {
+      provideDocumentFormattingEdits(model: any): any[] {
+        const lines: string[] = model.getLinesContent();
+        let indentLevel = 0;
+        const edits: any[] = [];
+
+        lines.forEach((line: string, index: number) => {
+          const trimmed = line.trim();
+
+          // 🔍 Check for closing braces even if followed by comments or keywords (e.g. } else {)
+          if (/^(\s*\})/i.test(trimmed)) {
+            indentLevel = Math.max(0, indentLevel - 1);
+          }
+
+          const targetIndent = "    ".repeat(indentLevel);
+          const formattedLine = trimmed === "" ? "" : targetIndent + trimmed;
+
+          edits.push({
+            range: new monaco.Range(index + 1, 1, index + 1, line.length + 1),
+            text: formattedLine,
+          });
+
+          // 🔍 Look for an opening brace anywhere before an optional comment block
+          if (/\{([^}*]*|(\/\/.*))?$/i.test(trimmed)) {
+            indentLevel++;
+          }
+        });
+
+        return edits;
+      },
+    });
+  };
 
   const handleEditorDidMount: OnMount = (editor, monaco) => {
     editorRef.current = editor;
+    monacoRef.current = monaco;
+    configureEditorThemes(monaco);
+    monaco.editor.setTheme("dark-theme");
 
-    if (language === "java" && !code) {
-      const lockedBoilerplate = [
-        "import java.util.*;",
-        "import java.io.*;",
-        "import java.math.*;",
-        "class Solution {",
-        "    public static void main(String[] args) {",
-        "// --- DO NOT ALTER ABOVE THIS LINE ---",
-        "        // Your code here",
-        "    }",
-        "}",
-      ].join("\n");
+    // Expose a programmatic formatting action to the toolbar.
+    onFormatMount?.(() => {
+      editor.getAction("editor.action.formatDocument")?.run();
+    });
 
-      editor.setValue(lockedBoilerplate);
+    // Shortcut for Shift + Alt + F manual layout formatting passes
+    editor.addCommand(monaco.KeyMod.Shift | monaco.KeyMod.Alt | monaco.KeyCode.KeyF, () => {
+      editor.getAction("editor.action.formatDocument")?.run();
+    });
+
+    if (language === "java" && !editor.getValue()) {
+      editor.setValue(JAVA_BOILERPLATE);
+      applyJavaDecorations(editor, monaco);
     }
 
     if (language === "java") {
       editor.onDidChangeCursorPosition((e) => {
-        const currentLine = e.position.lineNumber;
-        if (currentLine < 8) {
-          editor.setPosition({ lineNumber: 8, column: 1 });
+        const selection = editor.getSelection();
+        if (selection && selection.isEmpty()) {
+          if (e.position.lineNumber < 8) {
+            editor.setPosition({ lineNumber: 8, column: 9 });
+          }
         }
       });
     }
 
-    if (monaco.editor) {
-      monaco.editor.defineTheme("dark-theme", {
-        base: "vs-dark",
-        inherit: false,
-        rules: [
-          { token: "comment", foreground: "6b7280", fontStyle: "italic" },
-          { token: "keyword", foreground: "82aaff", fontStyle: "bold" },
-          { token: "keyword.operator", foreground: "f5c24d" },
-          { token: "number", foreground: "f78c6c" },
-          { token: "string", foreground: "c3e88d" },
-          { token: "delimiter.bracket", foreground: "c792ea" },
-          { token: "type", foreground: "7fdbca" },
-          { token: "class", foreground: "ffcb6b", fontStyle: "bold" },
-          { token: "variable", foreground: "d6deeb" },
-          { token: "variable.predefined", foreground: "82aaff" },
-          { token: "function", foreground: "82cfff" },
-          { token: "identifier", foreground: "d6deeb" },
-          { token: "operator", foreground: "89ddff" },
-          { token: "delimiter", foreground: "89ddff" },
-          { token: "tag", foreground: "ff5370" },
-          { token: "attribute.name", foreground: "c792ea" },
-          { token: "namespace", foreground: "89ddff" },
-          { token: "meta", foreground: "b2ccd6" },
-          { token: "regexp", foreground: "ecc48d" },
-        ],
-        colors: {
-          "editor.background": "#01050f",
-          "editor.foreground": "#d6deeb",
-          "editorLineNumber.foreground": "#3b4252",
-          "editorLineNumber.activeForeground": "#88c0d0",
-          "editorCursor.foreground": "#7fdbca",
-          "editor.selectionBackground": "#334e68",
-          "editor.inactiveSelectionBackground": "#22303c",
-          "editorIndentGuide.background": "#2f3c4a",
-          "editorIndentGuide.activeBackground": "#5c7e91",
-          "editorLineHighlightBackground": "#112131",
-          "editor.selectionHighlightBackground": "#334e68",
-          "editor.findMatchBackground": "#5f7c8e",
-          "editor.findMatchHighlightBackground": "#3b4c5c",
-          "editor.hoverHighlightBackground": "#2a3744",
-          "editorBracketMatch.background": "#21405b",
-          "editorBracketMatch.border": "#67c5ff",
-          "editorOverviewRuler.border": "#00000000",
-          "sideBar.background": "#020812",
-          "editorGutter.modifiedBackground": "#e7c547",
-          "editorGutter.addedBackground": "#a3be8c",
-          "editorGutter.deletedBackground": "#bf616a",
-        },
-      });
-      monaco.editor.setTheme("dark-theme");
-    }
-
+    // Map CMD/CTRL + ENTER keyboard execution handler
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
-      handleRunCode(editor.getValue(), language, oid, "RUN");
+      const { handleRunCode: run, language: lang, oid: id } = propsRef.current;
+      
+      // Auto-format the layout contents directly prior to server execution
+      editor.getAction("editor.action.formatDocument")?.run();
+      
+      // Introduce a microscopic timeout macro-task to let Monaco finish spacing before extraction
+      setTimeout(() => {
+        run(editor.getValue(), lang, id, "RUN");
+      }, 50);
     });
   };
 
+  // 🔄 Monitor Context clearing actions safely
   useEffect(() => {
-    return () => {
-      editorRef.current?.dispose();
-    };
-  }, []);
+    const editor = editorRef.current;
+    const monaco = monacoRef.current;
+
+    if (editor && monaco) {
+      if (code === "" || code === null) {
+        if (language === "java") {
+          editor.setValue(JAVA_BOILERPLATE);
+          applyJavaDecorations(editor, monaco);
+        } else {
+          decorationsRef.current = editor.deltaDecorations(decorationsRef.current, []);
+          editor.setValue("");
+        }
+      }
+    }
+  }, [code, language]);
 
   return (
-    <div className="h-full border border-white/10 rounded-xl overflow-hidden">
+    <div className="h-full min-h-0 overflow-hidden border border-white/10 bg-[#01050f] sm:rounded-xl">
       <Editor
         height="100%"
         language={language}
-        value={code}
+        value={code || (language === "java" ? JAVA_BOILERPLATE : "")}
+        loading={
+          <div className="flex h-full min-h-[220px] items-center justify-center gap-3 bg-[#01050f] text-sm font-medium text-indigo-200">
+            <Loader2 className="h-5 w-5 animate-spin text-indigo-300" />
+            Loading workspace modules...
+          </div>
+        }
         options={{
-          readOnly: false,
           minimap: { enabled: false },
           fontFamily: "'Fira Code', monospace",
           fontLigatures: true,
@@ -129,6 +203,9 @@ const MonacoIDE = ({ handleRunCode, language, code, oid, onCodeChange }: MonacoI
           scrollBeyondLastLine: false,
           wordWrap: "on",
           fontSize: 14,
+          formatOnType: true,
+          formatOnPaste: true,
+          autoIndent: "full",
         }}
         onChange={(value) => onCodeChange(value ?? "")}
         onMount={handleEditorDidMount}

@@ -34,13 +34,13 @@ const developerFeatures: DeveloperFeature[] = [
 
 const DeveloperTerminalSection = () => {
   return (
-    <div className="w-full max-w-6xl mx-auto mt-20 z-10 pb-40 px-4 flex flex-col lg:flex-row gap-16 items-center">
+    <div className="z-10 mx-auto mt-16 flex w-full max-w-6xl flex-col items-center gap-10 px-0 pb-28 sm:mt-20 sm:px-4 sm:pb-40 lg:flex-row lg:gap-16">
       <div className="w-full lg:w-1/2 flex flex-col gap-8">
-        <h2 className="text-4xl md:text-5xl font-bold text-textwhite leading-tight">
+        <h2 className="text-3xl font-bold leading-tight text-textwhite sm:text-4xl md:text-5xl">
           Developer First. <br />
           <span className="text-indigo-400">Terminal Ready.</span>
         </h2>
-        <p className="text-lg text-textdimwhite">
+        <p className="text-base text-textdimwhite sm:text-lg">
           DSAHub is built for developers who live in their editors. Experience a platform that feels right at home with your workflow.
         </p>
 
@@ -70,10 +70,10 @@ const DeveloperTerminalSection = () => {
             <span className="ml-4 text-xs font-mono text-textdimwhite/40 select-none">user@dsahub:~</span>
           </div>
 
-          <div className="p-6 md:p-8 font-mono text-sm sm:text-base leading-relaxed text-gray-300 min-h-[300px]">
-            <div className="flex gap-3">
+          <div className="min-h-[300px] p-4 font-mono text-sm leading-relaxed text-gray-300 sm:p-6 sm:text-base md:p-8">
+            <div className="flex min-w-0 gap-3">
               <span className="text-indigo-400">&rsaquo;</span>
-              <span className="text-white font-semibold tracking-wide">dsa-cli fetch --repo="DSA-LEETCODE"</span>
+              <span className="min-w-0 break-words font-semibold tracking-wide text-white">dsa-cli fetch --repo="DSA-LEETCODE"</span>
             </div>
 
             <div className="mt-3 text-textdimwhite/80 space-y-1">
@@ -90,9 +90,9 @@ const DeveloperTerminalSection = () => {
               </p>
             </div>
 
-            <div className="flex gap-3 mt-6">
+            <div className="mt-6 flex min-w-0 gap-3">
               <span className="text-indigo-400">&rsaquo;</span>
-              <span className="text-white font-semibold flex items-center gap-2 tracking-wide">
+              <span className="flex min-w-0 flex-wrap items-center gap-2 font-semibold tracking-wide text-white">
                 cat <span className="text-purple-400">BinarySearch.java</span>
                 <span className="w-2.5 h-5 bg-white/70 animate-pulse inline-block"></span>
               </span>

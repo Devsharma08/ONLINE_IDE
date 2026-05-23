@@ -5,7 +5,7 @@ import StickyFeatureShowcase from "../features/home/components/StickyFeatureShow
 
 const Home = () => {
   return (
-    <section className="flex flex-col items-center pt-24 px-6 relative w-full h-full">
+    <section className="flex h-full w-full flex-col items-center px-4 pt-24 sm:px-6">
       <HeroSection />
       <StickyFeatureShowcase />
       <BentoGrid />

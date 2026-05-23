@@ -2,6 +2,7 @@ import { StrictMode, Suspense, useState } from 'react'
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import App from './App.tsx'
 import About from './pages/About.tsx'
+import AppLoader from './components/AppLoader.tsx'
 import Home from './pages/Home.tsx'
 import Terminal from './pages/Terminal.tsx'
 
@@ -26,7 +27,7 @@ const Root = () => {
 
   return (
     <StrictMode>
-      <Suspense fallback={<div>loading</div>}>
+      <Suspense fallback={<AppLoader />}>
         <Router>
           <Routes>
             <Route path="/" element={<App />}>

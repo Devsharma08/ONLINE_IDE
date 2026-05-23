@@ -2,10 +2,10 @@ import { bentoItems } from "../content";
 
 const BentoGrid = () => {
   return (
-    <div className="w-full max-w-6xl mx-auto mt-20 z-10 pb-32 px-4">
-      <div className="text-center mb-16">
+    <div className="z-10 mx-auto mt-16 w-full max-w-6xl px-0 pb-24 sm:mt-20 sm:px-4 sm:pb-32">
+      <div className="mb-10 text-center sm:mb-16">
         <h2 className="text-3xl md:text-5xl font-bold text-textwhite mb-4">Master Every Structure</h2>
-        <p className="text-textdimwhite text-lg">Dive deep into categorized concepts directly from the repository.</p>
+        <p className="text-base text-textdimwhite sm:text-lg">Dive deep into categorized concepts directly from the repository.</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 md:grid-rows-3 gap-4 md:gap-6">

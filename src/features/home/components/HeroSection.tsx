@@ -3,18 +3,18 @@ import { Link } from "react-router-dom";
 
 const HeroSection = () => {
   return (
-    <div className="max-w-4xl w-full flex flex-col items-center text-center z-10 min-h-[80vh] justify-center pb-20">
+    <div className="z-10 flex min-h-[72vh] w-full max-w-4xl flex-col items-center justify-center pb-16 text-center sm:min-h-[80vh] sm:pb-20">
       <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-sm text-indigo-300 mb-8 backdrop-blur-sm shadow-[0_0_15px_rgba(255,255,255,0.05)] cursor-default">
         <span className="flex h-2 w-2 rounded-full bg-indigo-500 animate-pulse"></span>
         Live DSA Solutions
       </div>
 
-      <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-textwhite via-textlightwhite to-textgray mb-6 drop-shadow-sm">
+      <h1 className="mb-6 bg-gradient-to-r from-textwhite via-textlightwhite to-textgray bg-clip-text text-4xl font-extrabold tracking-tight text-transparent drop-shadow-sm sm:text-5xl md:text-7xl">
         Master Algorithms <br />
         <span className="bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-500">One File at a Time</span>
       </h1>
 
-      <p className="text-lg md:text-xl text-textdimwhite max-w-2xl mb-10 leading-relaxed">
+      <p className="mb-10 max-w-2xl text-base leading-relaxed text-textdimwhite sm:text-lg md:text-xl">
         Explore a carefully curated collection of Data Structures and Algorithms solutions. Browse the file tree, read the code, and elevate your problem-solving skills.
       </p>
 

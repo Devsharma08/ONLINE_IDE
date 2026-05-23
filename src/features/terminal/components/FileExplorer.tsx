@@ -1,8 +1,8 @@
-import { FileCode } from "lucide-react";
-import { useEffect, useMemo, useState, type KeyboardEvent, type MouseEvent, type ChangeEvent } from "react";
+import { FileCode, FilePenIcon as CreateFileIcon, Loader2 } from "lucide-react";
+import { useEffect, useMemo, useState, type CSSProperties, type KeyboardEvent, type MouseEvent, type ChangeEvent } from "react";
 import type { FileEntry } from "../../../context/fileNamesContext";
 import type { FileContentResponse } from "../types";
-import { FilePenIcon as CreateFileIcon } from "lucide-react";
+import {ScissorsIcon} from 'lucide-react'
 
 type FileExplorerProps = {
   activeFile: string | null;
@@ -14,6 +14,7 @@ type FileExplorerProps = {
   onFileClick: (oid: string, name: string) => void;
   onResizeStart: (event: MouseEvent<HTMLDivElement>) => void;
   onCreateFile?: (name: string) => void;
+  isLoadingFiles: boolean;
   selectedMode: "files-mode" | "terminal-mode";
   setSelectedMode: (mode: "files-mode" | "terminal-mode") => void;
 };
@@ -28,6 +29,7 @@ const FileExplorer = ({
   onFileClick,
   onResizeStart,
   onCreateFile,
+  isLoadingFiles,
   selectedMode,
   setSelectedMode,
 }: FileExplorerProps) => {
@@ -64,7 +66,23 @@ const FileExplorer = ({
 
   const searchActive = Boolean(searchInput.trim());
 
+  console.log("Deleting file with id:", activeFile);
+  const deleteLocalFileFromStorage = (activeFileId: string) => {
+    if (!activeFileId) return;
+    localStorage.removeItem(`localFile:${activeFileId}`);
+    window.location.reload();
+
+  };
+
+
   const detailsPanelClass = "p-4 space-y-4 border-b border-[#2b2b2b] bg-[#141518] text-sm text-slate-300";
+  const sidebarStyle = { "--sidebar-width": `${sidebarWidth}px` } as CSSProperties;
+  const renderLoadingState = (label: string) => (
+    <div className="flex items-center gap-2 rounded-lg border border-indigo-400/20 bg-indigo-500/10 px-3 py-3 text-sm text-indigo-100">
+      <Loader2 className="h-4 w-4 animate-spin text-indigo-300" />
+      <span>{label}</span>
+    </div>
+  );
 
   const crossCheckFileName = (name: string) => {
     const trimmedName = name.trim();
@@ -129,16 +147,13 @@ const FileExplorer = ({
   return (
     <>
       <aside
-        style={{
-          width: `${sidebarWidth}px`,
-          height: "100%",
-        }}
-        className="h-full p-2 border-r [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-gray-600 [&::-webkit-scrollbar-thumb]:bg-gray-300 border-[#2b2b2b] bg-[#111214] flex flex-col overflow-y-auto"
+        style={sidebarStyle}
+        className="flex max-h-[42dvh] min-h-[220px] w-full flex-none flex-col overflow-y-auto border-b border-[#2b2b2b] bg-[#111214] p-2 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-gray-600 [&::-webkit-scrollbar-thumb]:bg-gray-300 md:h-full md:max-h-none md:min-h-0 md:w-[var(--sidebar-width)] md:border-b-0 md:border-r"
         >
         {/* SELECTING FILE EXPLORER OR TERMINAL MODE - option for files explorer section or an empty terminal section*/}
-        <div className="px-2 text-xs justify-between sm:flex uppercase tracking-widest text-slate-500 xs:flex-col flex-nowrap mb-1">
-          <label htmlFor="mode-files" className="text-cyan-400 flex items-center">
-            practice with files
+        <div className="mb-2 grid grid-cols-1 gap-2 px-2 text-xs uppercase tracking-widest text-slate-500 sm:grid-cols-2 md:grid-cols-1 lg:grid-cols-2">
+          <label htmlFor="mode-files" className="flex items-center justify-between gap-2 rounded-lg border border-white/10 bg-white/[0.03] px-2 py-2 text-cyan-400">
+            <span>Practice files</span>
             <input
               type="radio"
               name="mode"
@@ -149,8 +164,8 @@ const FileExplorer = ({
               onChange={handleTerminalModeChange}
             />
           </label>
-          <label htmlFor="mode-terminal" className="text-cyan-400 flex items-center">
-            Empty Terminal
+          <label htmlFor="mode-terminal" className="flex items-center justify-between gap-2 rounded-lg border border-white/10 bg-white/[0.03] px-2 py-2 text-cyan-400">
+            <span>Empty terminal</span>
             <input
               type="radio"
               id="mode-terminal"
@@ -180,7 +195,9 @@ const FileExplorer = ({
 
           {searchActive && (
             <div className="absolute [&::-webkit-scrollbar]:[width:6px] [&::-webkit-scrollbar-track]:bg-gray-600 [&::-webkit-scrollbar-thumb]:bg-gray-300 left-4 right-4 top-full z-20 mt-3 max-h-72 overflow-y-auto rounded-3xl border border-[#2f333b] bg-[#0c1014] shadow-[0_32px_80px_rgba(0,0,0,0.55)]">
-              {filteredFiles.length > 0 ? (
+              {isLoadingFiles ? (
+                <div className="p-3">{renderLoadingState("Searching files...")}</div>
+              ) : filteredFiles.length > 0 ? (
                 <div className="space-y-1 p-3 text-sm text-slate-200 ">
                   {filteredFiles.map((file) => (
                     <button
@@ -207,6 +224,11 @@ const FileExplorer = ({
           )}
         </div>
        
+        {isLoadingFiles ? (
+          <div className="border-b border-[#2b2b2b] bg-[#141518] p-4">
+            {renderLoadingState("Syncing repository files...")}
+          </div>
+        ) : null}
 
         <div className={detailsPanelClass}>
           <div className="flex items-start justify-between gap-3">
@@ -262,7 +284,7 @@ const FileExplorer = ({
         </> : <>
           <div>
             {/* search bar - with menu different menus for now just creating 1 level files */}
-            <div className="p-4 border-b relative border-[#2b2b2b] bg-[#16181c] relative overflow-visible flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 border-b border-[#2b2b2b] bg-[#16181c] p-3 sm:p-4">
               {/* input for file name search , create files etc - this can be used to create new files and search for existing ones - we can also have a dropdown to select between different file types like .js, .java etc and create files of those types */}
               <input
                 type="text"
@@ -270,38 +292,57 @@ const FileExplorer = ({
                 onChange={(e) => setFileName(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && createNewFile(e)}
                 title="Create File"
-                className="bg-[#16181c] flex-1 text-slate-400 px-2 placeholder:text-slate-500 border-0 outline-none"
+                className="min-w-0 flex-1 rounded-lg border border-white/10 bg-[#101216] px-3 py-2 text-sm text-slate-200 outline-none placeholder:text-slate-500 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-500/20"
                 placeholder="Create file name (e.g., solution.js)"
                 aria-label="Create file name"
               />
               {/* container for creating files */}
-              <div className="absolute right-4 top-4 flex items-center gap-2 bg-black p-[3px] rounded">
-                <button type="button" className="text-white rounded px-2 py-1" onClick={() => createNewFile()} aria-label="Create file">
-                  <CreateFileIcon className="text-md" />
-                </button>
-              </div>
+              <button type="button" className="flex h-10 w-10 flex-none items-center justify-center rounded-lg border border-white/10 bg-black text-white transition hover:bg-white/10" onClick={() => createNewFile()} aria-label="Create file">
+                <CreateFileIcon className="h-4 w-4" />
+              </button>
             </div>
             {/* content - search results and files on local system */}
             <div className="p-[5px] text-sm text-slate-400 flex flex-col gap-3">
               <div className="text-xs font-bold uppercase tracking-widest text-end text-slate-500 mb-2">Files you have saved</div>
               <div className="flex flex-col gap-2">
                 {localFiles.length > 0 ? localFiles.map((file) => (
-                  <button
+                  <div
                     key={file.oid}
-                    type="button"
+                    role="button"
+                    tabIndex={0}
                     onClick={() => onFileClick(file.oid, file.name)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        onFileClick(file.oid, file.name);
+                      }
+                    }}
                     className="group flex w-full items-center gap-3 rounded-2xl border border-[#20252c] bg-[#13161a] px-4 py-3 text-left text-sm text-slate-200 transition hover:border-cyan-500/30 hover:bg-[#1c232d]"
                   >
                     <FileCode className="h-4 w-4 text-cyan-400" />
                     <div className="min-w-0 gap-2">
-                      <div className="font-medium text-white truncate">{file.name}</div>
+                      <div className="font-medium text-white truncate">{file.name }</div>
                     </div>
-                  </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        if (window.confirm(`Are you sure you want to delete ${file.name}? This action cannot be undone.`)) {
+                          deleteLocalFileFromStorage(file.oid);
+                        }
+                      }}
+                      className="ml-auto text-red-500 hover:text-red-700"
+                     
+                    >
+                      <ScissorsIcon className="h-4 w-4" />
+                    </button>
+                  </div>
                 )) : <div className="text-sm text-slate-500">You have not saved any files yet.</div>}
-               </div>
+              </div>
               <div className="text-xs font-bold uppercase tracking-widest text-end text-slate-500 mt-4 mb-2">Files from the problem repository</div>
               <div className="flex flex-col gap-2">
-                {repositoryFiles.length > 0 ? repositoryFiles.map((file) => (
+                {isLoadingFiles ? renderLoadingState("Loading repository files...") : repositoryFiles.length > 0 ? repositoryFiles.map((file) => (
                   <button
                     key={file.oid || file.name}
                     type="button"
@@ -323,7 +364,7 @@ const FileExplorer = ({
       </aside>
       <div
         onMouseDown={onResizeStart}
-        className="w-2 h-full bg-white/10 hover:bg-white/20 transition-colors active:color-white/80 cursor-col-resize"
+        className="hidden h-full w-2 cursor-col-resize bg-white/10 transition-colors hover:bg-white/20 active:color-white/80 md:block"
       />
     </>
   );

@@ -1,9 +1,14 @@
 import { useCallback, useEffect, useState, useRef, type MouseEvent } from "react";
 
+const getInitialOutputHeight = () => {
+  if (typeof window === "undefined") return 250;
+  return window.innerWidth < 768 ? Math.min(200, Math.floor(window.innerHeight * 0.3)) : 250;
+};
+
 export const useTerminalLayout = () => {
   const [sidebarWidth, setSidebarWidth] = useState(260);
   const [isSidebarDragging, setIsSidebarDragging] = useState(false);
-  const [outputHeight, setOutputHeight] = useState(250);
+  const [outputHeight, setOutputHeight] = useState(getInitialOutputHeight);
   const [isOutputDragging, setIsOutputDragging] = useState(false);
   const startDragY = useRef<number | null>(null);
   const startOutputHeight = useRef<number | null>(null);
@@ -29,7 +34,9 @@ export const useTerminalLayout = () => {
       if (!isSidebarDragging) return;
 
       window.requestAnimationFrame(() => {
-        setSidebarWidth(Math.max(150, event.clientX));
+        const maxSidebarWidth = Math.max(240, window.innerWidth - 420);
+        const nextWidth = Math.max(220, Math.min(event.clientX, maxSidebarWidth));
+        setSidebarWidth(nextWidth);
       });
     };
 
@@ -58,7 +65,10 @@ export const useTerminalLayout = () => {
         const startY = startDragY.current ?? event.clientY;
         const startH = startOutputHeight.current ?? outputHeight;
         const delta = startY - event.clientY; // drag up => positive
-        const nextHeight = Math.max(40, Math.min(startH + delta, Math.floor(window.innerHeight * 0.6)));
+        const isMobile = window.innerWidth < 768;
+        const minHeight = isMobile ? 150 : 80;
+        const maxHeight = Math.floor(window.innerHeight * (isMobile ? 0.45 : 0.6));
+        const nextHeight = Math.max(minHeight, Math.min(startH + delta, maxHeight));
         setOutputHeight(nextHeight);
       });
     };

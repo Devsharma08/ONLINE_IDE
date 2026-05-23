@@ -32,3 +32,6 @@ Xterm.js: A frontend library that renders a real, working terminal window in the
 
 When the user types a key in the browser terminal, Socket.io sends that character to the backend, which pipes it straight into the running Docker container's stdin.
 
+next - 
+1. reset to original/init state
+2. format document
