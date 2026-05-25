@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 import { CACHE_KEYS, EXTENSION_LANGUAGE_MAP } from "../../config/github.js";
 import { internalCache } from "../../Lib/cache.js";
 import { postGraphQL } from "../../Lib/githubClient.js";
+import { prisma } from "../../Lib/prisma.js";
 import type { GitHubFileNamesResponse } from "../../types/github.js";
 
 type LanguageMeta = {
@@ -81,6 +82,45 @@ export const getFileNames = async (_req: Request, res: Response) => {
         color: langMeta?.color || "#cccccc",
       };
     });
+
+    // Sync OIDs to database in the background without blocking client response
+    void (async () => {
+      try {
+        const dbProblems = await prisma.problem.findMany({
+          select: { id: true, name: true, github_oid: true }
+        });
+        const dbProblemMap = new Map<string, { id: string; github_oid: string }>();
+        for (const p of dbProblems) {
+          dbProblemMap.set(p.name.toLowerCase(), { id: p.id, github_oid: p.github_oid });
+        }
+
+        const updatePromises: Promise<unknown>[] = [];
+        for (const item of entries) {
+          if (item.type !== "blob") continue;
+          const baseName = item.name.split(".")[0]?.toLowerCase();
+          if (!baseName) continue;
+
+          const dbProblem = dbProblemMap.get(baseName);
+          if (dbProblem && dbProblem.github_oid !== item.oid) {
+            updatePromises.push(
+              prisma.problem.update({
+                where: { id: dbProblem.id },
+                data: { github_oid: item.oid }
+              }).catch((err) => {
+                console.error(`Failed to background-sync OID for problem ${baseName}:`, err);
+              })
+            );
+          }
+        }
+
+        if (updatePromises.length > 0) {
+          await Promise.all(updatePromises);
+          console.log(`Successfully auto-synced ${updatePromises.length} dynamic problem OIDs in the database.`);
+        }
+      } catch (syncError) {
+        console.error("Failed to dynamically sync LeetCode file OIDs to DB:", syncError);
+      }
+    })();
 
     internalCache.set(CACHE_KEYS.fileNames, unifiedResponse, 10 * 60);
     res.set("Cache-Control", "public,max-age=600");

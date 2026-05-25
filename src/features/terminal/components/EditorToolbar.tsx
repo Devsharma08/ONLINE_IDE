@@ -1,5 +1,5 @@
 import { useContext } from "react";
-import { FileCode, Loader2, Play, Send } from "lucide-react";
+import { FileCode, Loader2, Play, Send, RotateCcw } from "lucide-react";
 import type { ExecutionMode, SupportedLanguage } from "../types";
 import { CodeContext } from "../../../context/codeContext.tsx";
 import {BrushCleaning as Clear,Indent as IndentationIcon} from 'lucide-react'
@@ -16,14 +16,17 @@ type EditorToolbarProps = {
   onRun: () => void;
   onSubmit: () => void;
   onFormat: () => void;
+  onReset: () => void;
 };
 
-const EditorToolbar = ({ disabled, fileName, onRun, onSubmit, onFormat, language, executingMode, setLanguage, setCode }: EditorToolbarProps) => {
+const EditorToolbar = ({ disabled, activeFile, fileName, onRun, onSubmit, onFormat, onReset, language, executingMode, setLanguage, setCode }: EditorToolbarProps) => {
   
   const context = useContext(CodeContext);
   if (!context) {
     throw new Error("EditorToolbar must be used inside a CodeContext.Provider");
   }
+
+  const isLocal = activeFile && activeFile.startsWith("local-");
 
   const {
       setCode: setContextCode,
@@ -56,9 +59,14 @@ const EditorToolbar = ({ disabled, fileName, onRun, onSubmit, onFormat, language
         <button type="button" onClick={onFormat} title="Format code" className="flex items-center justify-center gap-2 rounded-md bg-[#1e1e1e] px-3 py-2 text-sm text-gray-300 hover:bg-[#2d2d2d] focus:outline-none focus:ring-2 focus:ring-indigo-500">
           <IndentationIcon className="w-4 h-4" />
         </button>
-        <button type="button" onClick={() => ClearChanges()} title="Clear Changes" className="flex items-center justify-center gap-2 rounded-md bg-[#1e1e1e] px-3 py-2 text-sm text-gray-300 hover:bg-[#2d2d2d] focus:outline-none focus:ring-2 focus:ring-indigo-500">
+        <button type="button" onClick={() => ClearChanges()} title="Clear changes" className="flex items-center justify-center gap-2 rounded-md bg-[#1e1e1e] px-3 py-2 text-sm text-gray-300 hover:bg-[#2d2d2d] focus:outline-none focus:ring-2 focus:ring-indigo-500">
           <Clear className="w-4 h-4" />
         </button>
+        {!isLocal && (
+          <button type="button" onClick={onReset} title="Reset to original template" className="flex items-center justify-center gap-2 rounded-md bg-[#1e1e1e] px-3 py-2 text-sm text-gray-300 hover:bg-[#2d2d2d] focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            <RotateCcw className="w-4 h-4 text-rose-400" />
+          </button>
+        )}
         <select className="min-w-0 rounded bg-[#1e1e1e] px-2 py-2 text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500" value={language} onChange={(e) => setLanguage(e.target.value as SupportedLanguage)}>
           <option value="javascript">JavaScript</option>
           <option value="java">Java</option>

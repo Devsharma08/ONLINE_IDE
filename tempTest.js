@@ -1,0 +1,10 @@
+const fs = require('fs');
+const path = require('path');
+const temp = path.join(process.cwd(),'temp-test');
+fs.rmSync(temp,{recursive:true,force:true});
+fs.mkdirSync(temp,{recursive:true});
+fs.writeFileSync(path.join(temp,'index.js'), `/**\n * @param {number[]} nums\n * @param {number} target\n * @return {number[]}\n */\nvar twoSum = function(nums, target) {\n    return [0,1];\n};\nmodule.exports = { twoSum };`);
+fs.writeFileSync(path.join(temp,'input.txt'),'[2,7,11,15]\n9\n');
+fs.writeFileSync(path.join(temp,'runner.js'), `const fs = require("fs");\nconst path = require("path");\nconst exported = require("./index.js");\nconst fn = typeof exported === "function" ? exported : exported && typeof exported === "object" ? exported["twoSum"] || exported[Object.keys(exported)[0]] : null;\nif (typeof fn !== "function") {\n  throw new Error("Could not resolve exported function for execution");\n}\nconst rawInput = fs.readFileSync(path.join(__dirname, "input.txt"), "utf8");\nconst lines = rawInput.replace(/\r\n/g, "\n").split("\n").filter((line) => line.length > 0);\nconst parseValue = (value) => {\n  const trimmed = value.trim();\n  if (trimmed === "true") return true;\n  if (trimmed === "false") return false;\n  if (/^[-+]?[0-9]+$/.test(trimmed)) return Number.parseInt(trimmed, 10);\n  if (/^[-+]?[0-9]*\.[0-9]+$/.test(trimmed)) return Number.parseFloat(trimmed);\n  if (/^[\[\{].*[\]\}]$/.test(trimmed) || (/^\".*\"$/.test(trimmed) || /^\'.*\'$/.test(trimmed))) {\n    try {\n      return JSON.parse(trimmed);\n    } catch (e) {\n      return trimmed.replace(/^['\"]|['\"]$/g, "");\n    }\n  }\n  return trimmed;\n};\nconst args = lines.map(parseValue);\nconst result = fn(...args);\nif (result !== undefined) {\n  if (typeof result === "object") {\n    console.log(JSON.stringify(result));\n  } else {\n    console.log(result);\n  }\n}`);
+const out = require('child_process').execSync('node runner.js',{cwd:temp,encoding:'utf8'});
+console.log('output:',out);

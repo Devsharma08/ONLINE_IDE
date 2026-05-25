@@ -23,38 +23,71 @@ export const getFileContent = async (req: Request, res: Response) => {
   }
 
   try {
-    const [data, testcases] = await Promise.all([
-      postGraphQL<GitHubFileContentResponse>({
-        query: `
-          query($owner: String!, $name: String!, $oid: GitObjectID!) {
-            repository(owner: $owner, name: $name) {
-              object(oid:$oid) {
-                ... on Blob {
-                  text
-                }
+    const data = await postGraphQL<GitHubFileContentResponse>({
+      query: `
+        query($owner: String!, $name: String!, $oid: GitObjectID!) {
+          repository(owner: $owner, name: $name) {
+            object(oid:$oid) {
+              ... on Blob {
+                text
               }
             }
           }
-        `,
-        variables: {
-          owner: GITHUB_OWNER,
-          name: GITHUB_REPO,
-          oid,
-        },
-      }),
-      prisma.problem.findUnique({
-        where: {
-          github_oid: oid,
-        },
-        select: {
-          test_cases: true,
-          id: true,
-          problem_definition: true,
-          problem_hints: true,
-          difficulty_level: true,
-        },
-      }),
-    ]);
+        }
+      `,
+      variables: {
+        owner: GITHUB_OWNER,
+        name: GITHUB_REPO,
+        oid,
+      },
+    });
+
+    let testcases = await prisma.problem.findUnique({
+      where: {
+        github_oid: oid,
+      },
+      select: {
+        test_cases: true,
+        id: true,
+        problem_definition: true,
+        problem_hints: true,
+        difficulty_level: true,
+      },
+    });
+
+    if (!testcases) {
+      // Fallback: search in cached filenames
+      const cachedFiles = internalCache.get<any[]>(CACHE_KEYS.fileNames);
+      const matchedFile = cachedFiles?.find((f) => f.oid === oid);
+      if (matchedFile && typeof matchedFile.name === "string") {
+        const baseName = matchedFile.name.split(".")[0];
+        if (baseName) {
+          testcases = await prisma.problem.findFirst({
+            where: {
+              name: {
+                equals: baseName,
+                mode: "insensitive",
+              },
+            },
+            select: {
+              test_cases: true,
+              id: true,
+              problem_definition: true,
+              problem_hints: true,
+              difficulty_level: true,
+            },
+          });
+
+          // Sync database OID for future fast lookups
+          if (testcases) {
+            await prisma.problem.update({
+              where: { id: testcases.id },
+              data: { github_oid: oid },
+            }).catch((err) => console.error("Failed to sync fallback OID in getFileContent:", err));
+          }
+        }
+      }
+    }
 
     const content = {
       content: data.data?.repository?.object?.text,

@@ -16,12 +16,15 @@ import {
 } from "../features/terminal/executionOutput";
 import { useTerminalLayout } from "../features/terminal/hooks/useTerminalLayout";
 import type { ExecutionMode, ExecutionResult, FileContentResponse, ProblemTestCase, SupportedLanguage } from "../features/terminal/types";
-
+import { usePreventTabClose } from '../utils/terminalUtils/HandleWindowClose'
 const LOCAL_FILE_ID_PREFIX = "local-";
 const LOCAL_FILE_STORAGE_PREFIX = "localFile:";
+const NEW_TEMP_LOCAL_STORAGE_KEY = "newLocalFileContent#";
 
 const getLocalStorageKey = (oid: string) => `${LOCAL_FILE_STORAGE_PREFIX}${oid}`;
 const isLocalFile = (oid: string | null): boolean => Boolean(oid && oid.startsWith(LOCAL_FILE_ID_PREFIX));
+
+
 
 const readLocalFile = (oid: string) => {
    const raw = localStorage.getItem(getLocalStorageKey(oid));
@@ -42,11 +45,27 @@ const Terminal = () => {
    const [isExecuting, setIsExecuting] = useState(false);
    const [executingMode, setExecutingMode] = useState<ExecutionMode | null>(null);
    const [outputText, setOutputText] = useState<string>("");
+   const [outputStatus, setOutputStatus] = useState<"RUNTIME_ERROR" | "SUCCESS" | "ERROR" | "LOADING" | "TIMEOUT" | null>(null);
    const [output, setOutput] = useState<ExecutionResult | null>(null);
    const [resLoading, setResponseLoading] = useState<boolean>(false);
    const [customInput, setCustomInput] = useState<string>("");
    const [customInputActive, setCustomInputActive] = useState<boolean>(false);
    const [isCustomInputRun, setIsCustomInputRun] = useState<boolean>(false);
+
+   
+   // local file content
+   const [checkFileExists, setCheckFileExists] = useState<boolean>(false);
+   
+   usePreventTabClose(true);
+   useEffect(() => {
+      if (!activeFile) {
+         setCheckFileExists(false);
+         return;
+      }
+      const key = getLocalStorageKey(activeFile); 
+      const exists = isLocalFile(key) ? Boolean(readLocalFile(activeFile)) : true;
+      setCheckFileExists(exists);
+   },[activeFile]);
    
 
    // selection b/w output or test cases
@@ -71,7 +90,7 @@ const Terminal = () => {
       filesData,
       setFilesData
    } = useContext(FileNamesContext);
-
+   
    const { setStatus } = useContext(UserResponseContext);
    const {
       setCode: setContextCode,
@@ -82,14 +101,87 @@ const Terminal = () => {
       setCustomInput: setContextCustomInput,
       setCustomInputActive: setContextCustomInputActive,
    } = useContext(CodeContext);
-
+   
    const executeCache = useRef<Map<string, ExecutionResult>>(new Map());
    const formatEditorRef = useRef<(() => void) | null>(null);
+
+   const fetchFileCode = async (oid: string) => {
+      try {
+         const response = await fetchFileContent(oid);
+         const { content, language } = response.data;
+         setContextCode(content);
+         setContextLanguage(language);
+      } catch (error) {
+         console.log(error);
+      }
+   }
+   
+   // move to previous file state 
+   const checkIfFileIdInLocalStorage = (oid: string | null): boolean => {
+      if (!oid) return false;
+      if(oid.startsWith(LOCAL_FILE_ID_PREFIX)) {
+         const localFile = readLocalFile(oid);
+         return Boolean(localFile);
+      }
+      return false;
+   };
+
+    const handleResetCode = useCallback(async () => {
+       if (!activeFile) return;
+
+       if (isLocalFile(activeFile)) {
+          // Reset local file to empty string template
+          const localKey = getLocalStorageKey(activeFile);
+          const existing = readLocalFile(activeFile);
+          if (existing) {
+             localStorage.setItem(
+                localKey,
+                JSON.stringify({
+                   ...existing,
+                   content: "",
+                   updatedAt: Date.now(),
+                })
+             );
+          }
+          setCode("");
+          setContextCode("");
+       } else {
+          // Seed/Repository file - Re-fetch clean template from backend
+          setLoading(true);
+          try {
+             const fileContent = await fetchFileContent(activeFile);
+             const nextCode = fileContent.content || "";
+             setCode(nextCode);
+             setContextCode(nextCode);
+          } catch (error) {
+             console.error("Failed to reset template:", error);
+          } finally {
+             setLoading(false);
+          }
+       }
+    }, [activeFile, setContextCode]);
+
+
+   const createFileInLocalStorage = (name: string, language: SupportedLanguage): string => {
+      if(!checkIfFileIdInLocalStorage(activeFile)) {
+         const oid = `${LOCAL_FILE_ID_PREFIX}${crypto.randomUUID?.() ?? Date.now().toString()}`;
+         const localFile = {
+            name,
+            content: "",
+            language,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+         };
+         localStorage.setItem(getLocalStorageKey(oid), JSON.stringify(localFile));
+         return oid;
+      }
+   };
+   
 
    const handleFormatCode = useCallback(() => {
       formatEditorRef.current?.();
    }, []);
-
+   
    const saveLocalFileContent = useCallback((oid: string, content: string) => {
       const existing = readLocalFile(oid);
       if (!existing) return;
@@ -102,11 +194,13 @@ const Terminal = () => {
          }),
       );
    }, []);
-
+   
+   console.log("activeFile", activeFile, fileData);
 
    const handleFileClick = useCallback(async (oid: string, name: string) => {
       setOutput(null);
       setOutputText("");
+      setOutputStatus('LOADING');
       setContextOutput(null);
       setActiveFile(oid);
       setLoading(!isLocalFile(oid));
@@ -181,6 +275,7 @@ const Terminal = () => {
          setContextOutput(cached);
          setStatus("SUCCESS");
          setOutputText(formatExecutionOutput(cached, mode));
+         setOutputStatus(cached.status === "success" ? "SUCCESS" : cached.status === "runtime_error" ? "RUNTIME_ERROR" : "ERROR");
          return;
       }
 
@@ -188,6 +283,7 @@ const Terminal = () => {
       setIsExecuting(true);
       setExecutingMode(mode);
       setStatus("LOADING");
+      setOutputStatus("LOADING");
 
       try {
          const data = await executeCode({ code: nextCode, language: nextLanguage, oid, mode, customInput: customInputValue });
@@ -240,8 +336,22 @@ const Terminal = () => {
       return localFiles;
    }, []);
 
+   useEffect(() => {      
+      if (activeFile && isLocalFile(activeFile)) {
+         const localFile = readLocalFile(activeFile);
+         if (localFile) {
+            localStorage.setItem(getLocalStorageKey(activeFile), JSON.stringify({
+               ...localFile,
+               content: code,
+               updatedAt: Date.now(),
+            }));
+         }
+      }
+   }, [code]);
+
    useEffect(() => {
       let cancelled = false;
+      setOutputStatus(null);
 
       const loadFileNames = async () => {
          await Promise.resolve();
@@ -381,6 +491,7 @@ const Terminal = () => {
                            onRun={() => void handleRunCode(code, language, activeFile, "RUN")}
                            onSubmit={() => void handleRunCode(code, language, activeFile, "SUBMIT")}
                            onFormat={handleFormatCode}
+                           onReset={handleResetCode}
                         />
 
                         <div className='flex-1 min-h-0 grid' style={{ gridTemplateRows: "minmax(0, 1fr) auto" }}>
@@ -411,6 +522,8 @@ const Terminal = () => {
                               setCustomInputActive={setCustomInputActive}
                               onResizeStart={startOutputDragging}
                               setIsOutputActive={setIsOutputActive}
+                              outputStatus={outputStatus}
+                              setOutputStatus={setOutputStatus}
                            />
                         </div>
                      </>

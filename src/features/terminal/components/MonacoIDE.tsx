@@ -38,6 +38,8 @@ const MonacoIDE = ({ handleRunCode, language, code, oid, onCodeChange, onFormatM
   const decorationsRef = useRef<string[]>([]); // Prevents visual decoration memory leaks
   const propsRef = useRef({ handleRunCode, language, oid });
 
+  const isLocal = oid && oid.startsWith("local-");
+
   useEffect(() => {
     propsRef.current = { handleRunCode, language, oid };
   }, [handleRunCode, language, oid]);
@@ -132,12 +134,12 @@ const MonacoIDE = ({ handleRunCode, language, code, oid, onCodeChange, onFormatM
       editor.getAction("editor.action.formatDocument")?.run();
     });
 
-    if (language === "java" && !editor.getValue()) {
+    if (language === "java" && !editor.getValue() && !isLocal) {
       editor.setValue(JAVA_BOILERPLATE);
       applyJavaDecorations(editor, monaco);
     }
 
-    if (language === "java") {
+    if (language === "java" && !isLocal) {
       editor.onDidChangeCursorPosition((e) => {
         const selection = editor.getSelection();
         if (selection && selection.isEmpty()) {
@@ -169,7 +171,7 @@ const MonacoIDE = ({ handleRunCode, language, code, oid, onCodeChange, onFormatM
 
     if (editor && monaco) {
       if (code === "" || code === null) {
-        if (language === "java") {
+        if (language === "java" && !isLocal) {
           editor.setValue(JAVA_BOILERPLATE);
           applyJavaDecorations(editor, monaco);
         } else {
@@ -178,7 +180,7 @@ const MonacoIDE = ({ handleRunCode, language, code, oid, onCodeChange, onFormatM
         }
       }
     }
-  }, [code, language]);
+  }, [code, language, isLocal]);
 
   return (
     <div className="h-full min-h-0 overflow-hidden border border-white/10 bg-[#01050f] sm:rounded-xl">
