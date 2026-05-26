@@ -6,7 +6,7 @@ const getInitialOutputHeight = () => {
 };
 
 export const useTerminalLayout = () => {
-  const [sidebarWidth, setSidebarWidth] = useState(260);
+  const [sidebarWidth, setSidebarWidth] = useState(360);
   const [isSidebarDragging, setIsSidebarDragging] = useState(false);
   const [outputHeight, setOutputHeight] = useState(getInitialOutputHeight);
   const [isOutputDragging, setIsOutputDragging] = useState(false);
@@ -34,8 +34,8 @@ export const useTerminalLayout = () => {
       if (!isSidebarDragging) return;
 
       window.requestAnimationFrame(() => {
-        const maxSidebarWidth = Math.max(240, window.innerWidth - 420);
-        const nextWidth = Math.max(220, Math.min(event.clientX, maxSidebarWidth));
+        const maxSidebarWidth = Math.max(30, window.innerWidth - 420);
+        const nextWidth = Math.max(30, Math.min(event.clientX, maxSidebarWidth));
         setSidebarWidth(nextWidth);
       });
     };
@@ -67,7 +67,7 @@ export const useTerminalLayout = () => {
         const delta = startY - event.clientY; // drag up => positive
         const isMobile = window.innerWidth < 768;
         const minHeight = isMobile ? 150 : 80;
-        const maxHeight = Math.floor(window.innerHeight * (isMobile ? 0.45 : 0.6));
+        const maxHeight = Math.floor(window.innerHeight * (isMobile ? 0.90 : 1));
         const nextHeight = Math.max(minHeight, Math.min(startH + delta, maxHeight));
         setOutputHeight(nextHeight);
       });
@@ -92,8 +92,8 @@ export const useTerminalLayout = () => {
 
   return {
     outputHeight,
-    sidebarWidth,
-    startOutputDragging,
+    sidebarWidth,    setOutputHeight,    startOutputDragging,
     startSidebarDragging,
+    setSidebarWidth,
   };
 };

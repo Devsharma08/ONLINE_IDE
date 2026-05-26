@@ -10,6 +10,15 @@ type LanguageMeta = {
   color: string | null;
 };
 
+const checkDiffuclty=(name:string,arr:string[])=>{
+  for(let i=0;i<arr.length;i++){
+    if(name.endsWith(arr[i])){
+      return arr[i];
+    }
+  }
+  return 'E';
+}
+
 export const getFileNames = async (_req: Request, res: Response) => {
   try {
     const cached = internalCache.get(CACHE_KEYS.fileNames);
@@ -45,8 +54,8 @@ export const getFileNames = async (_req: Request, res: Response) => {
       `,
     });
 
-    const entries = rawData.data?.repository?.object?.entries;
-    const languagesData = rawData.data?.repository?.languages?.edges;
+    const entries = rawData.data?.repository?.object?.entries; // The main file/directory listing from the root of the repository
+    const languagesData = rawData.data?.repository?.languages?.edges; // The language breakdown data for the repository
 
     if (!entries) {
       return res.status(404).json({ error: "Repository structure data not found" });
@@ -62,11 +71,13 @@ export const getFileNames = async (_req: Request, res: Response) => {
 
     const unifiedResponse = entries.map((item) => {
       let matchedLanguage: string | null;
+      let difficulty: string = 'E';
 
       if (item.type === "tree") {
         matchedLanguage = EXTENSION_LANGUAGE_MAP[item.name.toLowerCase()] || item.name;
       } else {
         const parts = item.name.split(".");
+        difficulty = checkDiffuclty(parts[0] || "", ['H', 'M', 'E']);
         const extension = parts.length > 1 ? parts.pop()?.toLowerCase() ?? "" : "";
         matchedLanguage = EXTENSION_LANGUAGE_MAP[extension] || null;
       }
@@ -80,6 +91,7 @@ export const getFileNames = async (_req: Request, res: Response) => {
         language: matchedLanguage || "Unknown",
         size: langMeta?.size ?? 0,
         color: langMeta?.color || "#cccccc",
+        difficulty_level: difficulty
       };
     });
 

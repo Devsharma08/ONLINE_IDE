@@ -1,5 +1,5 @@
 import { useContext } from "react";
-import { FileCode, Loader2, Play, Send, RotateCcw } from "lucide-react";
+import { FileCode, Loader2, Play, Send, RotateCcw, Maximize } from "lucide-react";
 import type { ExecutionMode, SupportedLanguage } from "../types";
 import { CodeContext } from "../../../context/codeContext.tsx";
 import {BrushCleaning as Clear,Indent as IndentationIcon} from 'lucide-react'
@@ -17,9 +17,11 @@ type EditorToolbarProps = {
   onSubmit: () => void;
   onFormat: () => void;
   onReset: () => void;
+  sidebarWidth: number;
+  setSidebarWidth: (width: number) => void;
 };
 
-const EditorToolbar = ({ disabled, activeFile, fileName, onRun, onSubmit, onFormat, onReset, language, executingMode, setLanguage, setCode }: EditorToolbarProps) => {
+const EditorToolbar = ({ disabled, activeFile, fileName, onRun, onSubmit, onFormat, onReset, language, executingMode, setLanguage, setCode, sidebarWidth, setSidebarWidth }: EditorToolbarProps) => {
   
   const context = useContext(CodeContext);
   if (!context) {
@@ -28,6 +30,15 @@ const EditorToolbar = ({ disabled, activeFile, fileName, onRun, onSubmit, onForm
 
   const isLocal = activeFile && activeFile.startsWith("local-");
 
+  const handleMaximize = () => {
+    if(sidebarWidth <= 50) {
+      setSidebarWidth(360);
+      return;
+    }else{
+      setSidebarWidth(50);
+    }
+  }
+ 
   const {
       setCode: setContextCode,
       setOutput: setContextOutput,
@@ -56,6 +67,10 @@ const EditorToolbar = ({ disabled, activeFile, fileName, onRun, onSubmit, onForm
       </div>
 
       <div className="grid w-full grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 sm:flex sm:w-auto">
+        {/* maximize monaco panel */}
+        <button type="button" onClick={handleMaximize} title="Maximize panel" className="flex items-center justify-center gap-2 rounded-md bg-[#1e1e1e] px-3 py-2 text-sm text-gray-300 hover:bg-[#2d2d2d] focus:outline-none focus:ring-2 focus:ring-indigo-500">
+          <Maximize className="w-4 h-4" />
+        </button>
         <button type="button" onClick={onFormat} title="Format code" className="flex items-center justify-center gap-2 rounded-md bg-[#1e1e1e] px-3 py-2 text-sm text-gray-300 hover:bg-[#2d2d2d] focus:outline-none focus:ring-2 focus:ring-indigo-500">
           <IndentationIcon className="w-4 h-4" />
         </button>

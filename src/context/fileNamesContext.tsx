@@ -7,6 +7,7 @@ export type FileEntry = {
     type?: string;
     path?: string;
     isLocal?: boolean;
+    difficulty_level?: string;
 }
 
 export type FileNamesContextType = {

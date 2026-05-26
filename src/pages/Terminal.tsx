@@ -81,8 +81,10 @@ const Terminal = () => {
    const {
       outputHeight,
       sidebarWidth,
+      setOutputHeight,
       startOutputDragging,
       startSidebarDragging,
+      setSidebarWidth,
    } = useTerminalLayout();
 
    // context states
@@ -104,6 +106,9 @@ const Terminal = () => {
    
    const executeCache = useRef<Map<string, ExecutionResult>>(new Map());
    const formatEditorRef = useRef<(() => void) | null>(null);
+
+   // filter files accoring to difficulty level
+   const [difficultyFilter, setDifficultyFilter] = useState<"ALL" | "EASY" | "MEDIUM" | "HARD">("ALL");
 
    const fetchFileCode = async (oid: string) => {
       try {
@@ -456,6 +461,8 @@ const Terminal = () => {
          <FileExplorer
             activeFile={activeFile}
             files={filesData}
+            difficultyFilter={difficultyFilter}
+            setDifficultyFilter={setDifficultyFilter}
             fileData={fileData}
             language={language}
             testCaseCount={testCases.length}
@@ -486,6 +493,8 @@ const Terminal = () => {
                            executingMode={executingMode}
                            language={language}
                            setLanguage={setLanguage}
+                           sidebarWidth={sidebarWidth}
+                           setSidebarWidth={setSidebarWidth}
                            setCode={setCode}
                            fileName={activeFileName}
                            onRun={() => void handleRunCode(code, language, activeFile, "RUN")}
@@ -500,6 +509,7 @@ const Terminal = () => {
                                  handleRunCode={handleRunCode}
                                  language={language}
                                  code={code}
+                                 
                                  oid={activeFile}
                                  onCodeChange={handleCodeChange}
                                  onFormatMount={(formatAction) => {
@@ -513,6 +523,7 @@ const Terminal = () => {
                               isOutputActive={isOutputActive}
                               output={output}
                               outputHeight={outputHeight}
+                              setOutputHeight={setOutputHeight}
                               outputText={outputText}
                               testCases={testCases}
                               customInput={customInput}
@@ -522,8 +533,6 @@ const Terminal = () => {
                               setCustomInputActive={setCustomInputActive}
                               onResizeStart={startOutputDragging}
                               setIsOutputActive={setIsOutputActive}
-                              outputStatus={outputStatus}
-                              setOutputStatus={setOutputStatus}
                            />
                         </div>
                      </>

@@ -1,6 +1,7 @@
 import { Loader2, Check, X, AlertTriangle, Clock } from "lucide-react";
 import type { ExecutionResult, ProblemTestCase } from "../types";
 import type { MouseEvent } from "react";
+import {Maximize2} from 'lucide-react';
 
 type OutputPanelProps = {
   isExecuting: boolean;
@@ -13,6 +14,7 @@ type OutputPanelProps = {
   customInput: string;
   customInputActive: boolean;
   onResizeStart: (event: MouseEvent<HTMLDivElement>) => void;
+  setOutputHeight: (height: number) => void;
   setCustomInput: (value: string) => void;
   setCustomInputActive: (active: boolean) => void;
   setIsOutputActive: (active: boolean) => void;
@@ -35,9 +37,10 @@ const OutputPanel = ({
   testCases,
   customInput,
   customInputActive,
+  onResizeStart,
+  setOutputHeight,
   setCustomInput,
   setCustomInputActive,
-  onResizeStart,
   setIsOutputActive,
 }: OutputPanelProps) => {
   const getResultForCase = (index: number) => {
@@ -50,6 +53,18 @@ const OutputPanel = ({
   // Dynamically compute output status to prevent prop-drilling errors from Terminal.tsx
   const hasError = output?.details?.some((detail) => detail.runtimeError);
   const allPassed = output?.status === "PASSED" || (output?.passedCases === output?.totalCases && output?.totalCases > 0);
+
+  // handeling maximize output panel
+  const handleMaximizeOutput = () => {
+    const reservedHeight = 150;
+    if(outputHeight === window.innerHeight - reservedHeight) {
+      setOutputHeight(200);
+      return;
+    }
+    const maximizedHeight = Math.max(150, window.innerHeight - reservedHeight);
+    setOutputHeight(maximizedHeight);
+    
+  };
 
   const outputStatus: "LOADING" | "TIMEOUT" | "RUNTIME_ERROR" | "ACCEPTED" | "WRONG_ANSWER" | "IDLE" = isExecuting
     ? "LOADING"
@@ -72,7 +87,10 @@ const OutputPanel = ({
       />
       
       <div
-        style={{ height: `${outputHeight}px`, maxHeight: "min(70vh, 600px)" }}
+        style={{
+          height: `${outputHeight}px`,
+          maxHeight: outputHeight > 600 ? "none" : "min(70vh, 600px)",
+        }}
         className="flex-none overflow-y-auto border-t border-white/10 bg-[#0c0d0f] p-4 font-mono [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-slate-900/40 [&::-webkit-scrollbar-thumb]:bg-slate-700/60 sm:p-5"
       >
         {/* Navigation Tabs */}
@@ -86,8 +104,19 @@ const OutputPanel = ({
             </button>
           </div>
 
+            {/* maximize o/p pannel */}
+            {!isOutputActive && (
+              <button className="hover:bg-white/10 p-2 rounded-lg transition-colors" title="Maximize output panel" onClick={handleMaximizeOutput}>
+                <Maximize2 className="h-3 w-3 text-slate-400" />
+              </button>
+            )}
           {isOutputActive ? (
+            <div className="flex items-center gap-4">
+              <button className="hover:bg-white/10 p-2 rounded-lg transition-colors" title="Maximize output panel" onClick={handleMaximizeOutput}>
+                <Maximize2 className="h-3 w-3 text-slate-400" />
+              </button>
             <label className="flex w-fit cursor-pointer items-center gap-2 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-1.5 text-xs text-slate-400 hover:bg-white/[0.05] transition-all">
+              
               <span>Custom Input Parameters</span>
               <input
                 type="checkbox"
@@ -97,6 +126,7 @@ const OutputPanel = ({
                 onChange={() => setCustomInputActive(!customInputActive)}
               />
             </label>
+            </div>
           ) : null}
         </div>
 
