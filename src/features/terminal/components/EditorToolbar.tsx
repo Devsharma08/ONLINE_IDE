@@ -32,7 +32,7 @@ const EditorToolbar = ({ disabled, activeFile, fileName, onRun, onSubmit, onForm
 
   const handleMaximize = () => {
     if(sidebarWidth <= 50) {
-      setSidebarWidth(360);
+      setSidebarWidth(window.innerWidth/3.1);
       return;
     }else{
       setSidebarWidth(50);
@@ -53,61 +53,73 @@ const EditorToolbar = ({ disabled, activeFile, fileName, onRun, onSubmit, onForm
    }
 
   return (
-    <div className="flex flex-col gap-2 border-b border-white/10 bg-[#252526] px-3 py-2 sm:flex-row sm:items-center sm:justify-between sm:px-4">
+    <div className="editor-toolbar flex flex-col gap-2 border-b border-white/5 bg-[#0b0c0e] px-3 py-2 sm:flex-row sm:items-center sm:justify-between sm:px-4">
       <div className="flex min-w-0 items-center gap-2">
-        <FileCode className="w-4 h-4 text-orange-500" />
+        <FileCode className="w-4 h-4 text-cyan-400" />
         <input
           type="text"
-          className="min-w-0 flex-1 truncate bg-transparent text-sm font-medium text-gray-300 outline-none"
+          className="min-w-0 flex-1 truncate bg-transparent text-xs font-mono text-cyan-400/80 outline-none whitespace-nowrap"
           value={fileName}
           readOnly
-          placeholder="Enter file name"
+          placeholder="ENTER_FILE..."
           aria-label="File name"
         />
       </div>
 
-      <div className="grid w-full grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 sm:flex sm:w-auto">
+      <div className="grid w-full grid-cols-5 items-center gap-1 sm:flex sm:w-auto">
         {/* maximize monaco panel */}
-        <button type="button" onClick={handleMaximize} title="Maximize panel" className="flex items-center justify-center gap-2 rounded-md bg-[#1e1e1e] px-3 py-2 text-sm text-gray-300 hover:bg-[#2d2d2d] focus:outline-none focus:ring-2 focus:ring-indigo-500">
-          <Maximize className="w-4 h-4" />
+        <button type="button" onClick={handleMaximize} title="Maximize editor panel" className="flex items-center justify-center rounded-none border border-cyan-500/20 bg-cyan-950/5 hover:border-cyan-500/40 hover:bg-cyan-950/15 text-cyan-400 px-2 py-1.5 text-xs font-mono transition-all duration-150 active:scale-95 cursor-pointer whitespace-nowrap">
+          <span className="text-cyan-500/40 select-none mr-1">[</span>
+          <Maximize className="w-3.5 h-3.5 text-cyan-400" />
+          <span className="text-cyan-500/40 select-none ml-1">]</span>
         </button>
-        <button type="button" onClick={onFormat} title="Format code" className="flex items-center justify-center gap-2 rounded-md bg-[#1e1e1e] px-3 py-2 text-sm text-gray-300 hover:bg-[#2d2d2d] focus:outline-none focus:ring-2 focus:ring-indigo-500">
-          <IndentationIcon className="w-4 h-4" />
+        <button type="button" onClick={onFormat} title="Format active code" className="flex items-center justify-center rounded-none border border-cyan-500/20 bg-cyan-950/5 hover:border-cyan-500/40 hover:bg-cyan-950/15 text-cyan-400 px-2 py-1.5 text-xs font-mono transition-all duration-150 active:scale-95 cursor-pointer whitespace-nowrap">
+          <span className="text-cyan-500/40 select-none mr-1">[</span>
+          <IndentationIcon className="w-3.5 h-3.5 text-cyan-400" />
+          <span className="text-cyan-500/40 select-none ml-1">]</span>
         </button>
-        <button type="button" onClick={() => ClearChanges()} title="Clear changes" className="flex items-center justify-center gap-2 rounded-md bg-[#1e1e1e] px-3 py-2 text-sm text-gray-300 hover:bg-[#2d2d2d] focus:outline-none focus:ring-2 focus:ring-indigo-500">
-          <Clear className="w-4 h-4" />
+        <button type="button" onClick={() => ClearChanges()} title="Clear current draft" className="flex items-center justify-center rounded-none border border-cyan-500/20 bg-cyan-950/5 hover:border-cyan-500/40 hover:bg-cyan-950/15 text-cyan-400 px-2 py-1.5 text-xs font-mono transition-all duration-150 active:scale-95 cursor-pointer whitespace-nowrap">
+          <span className="text-cyan-500/40 select-none mr-1">[</span>
+          <Clear className="w-3.5 h-3.5 text-cyan-400" />
+          <span className="text-cyan-500/40 select-none ml-1">]</span>
         </button>
         {!isLocal && (
-          <button type="button" onClick={onReset} title="Reset to original template" className="flex items-center justify-center gap-2 rounded-md bg-[#1e1e1e] px-3 py-2 text-sm text-gray-300 hover:bg-[#2d2d2d] focus:outline-none focus:ring-2 focus:ring-indigo-500">
-            <RotateCcw className="w-4 h-4 text-rose-400" />
+          <button type="button" onClick={onReset} title="Reset to original problem template" className="flex items-center justify-center rounded-none border border-rose-500/20 bg-rose-950/5 hover:border-rose-500/40 hover:bg-rose-950/15 text-rose-400 px-2 py-1.5 text-xs font-mono transition-all duration-150 active:scale-95 cursor-pointer whitespace-nowrap">
+            <span className="text-rose-500/40 select-none mr-1">[</span>
+            <RotateCcw className="w-3.5 h-3.5 text-rose-400" />
+            <span className="text-rose-500/40 select-none ml-1">]</span>
           </button>
         )}
-        <select className="min-w-0 rounded bg-[#1e1e1e] px-2 py-2 text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500" value={language} onChange={(e) => setLanguage(e.target.value as SupportedLanguage)}>
-          <option value="javascript">JavaScript</option>
-          <option value="java">Java</option>
+        <select className="min-w-0 rounded-none border border-white/10 bg-black/40 px-1 py-1.5 text-[10px] font-mono text-cyan-400 outline-none transition focus:border-cyan-500/40 whitespace-nowrap" value={language} onChange={(e) => setLanguage(e.target.value as SupportedLanguage)}>
+          <option value="javascript" className="whitespace-nowrap">JS</option>
+          <option value="java" className="whitespace-nowrap">JV</option>
         </select>
         <button
           onClick={onRun}
           disabled={disabled}
           aria-busy={executingMode === "RUN"}
-          className={`flex min-h-9 items-center justify-center gap-2 rounded-md bg-indigo-600 px-3 py-2 text-sm text-white transition-colors hover:bg-indigo-700 ${
+          title="Run solution (Ctrl+Enter)"
+          className={`flex items-center justify-center rounded-none border border-cyan-500/30 bg-cyan-950/10 text-cyan-400 hover:bg-cyan-950/20 hover:border-cyan-400 px-2.5 py-1.5 text-xs font-mono tracking-wider transition-all duration-150 active:scale-95 cursor-pointer whitespace-nowrap ${
             disabled ? "opacity-50 cursor-not-allowed" : ""
           }`}
         >
-          {executingMode === "RUN" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
-          <span>Run</span>
+          <span className="text-cyan-500/40 select-none mr-1">[</span>
+          {executingMode === "RUN" ? <Loader2 className="w-3.5 h-3.5 animate-spin text-cyan-400" /> : <Play className="w-3.5 h-3.5 text-cyan-400" />}
+          <span className="text-cyan-500/40 select-none ml-1">]</span>
         </button>
 
         <button
           onClick={onSubmit}
           disabled={disabled}
           aria-busy={executingMode === "SUBMIT"}
-          className={`flex min-h-9 items-center justify-center gap-2 rounded-md bg-indigo-600 px-3 py-2 text-sm text-white transition-colors hover:bg-indigo-700 ${
+          title="Submit solution for full tests validation"
+          className={`flex items-center justify-center rounded-none border border-emerald-500/30 bg-emerald-950/10 text-emerald-400 hover:bg-emerald-950/20 hover:border-emerald-400 px-2.5 py-1.5 text-xs font-mono tracking-wider transition-all duration-150 active:scale-95 cursor-pointer whitespace-nowrap ${
             disabled ? "opacity-50 cursor-not-allowed" : ""
           }`}
         >
-          {executingMode === "SUBMIT" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-          <span>Submit</span>
+          <span className="text-emerald-500/40 select-none mr-1">[</span>
+          {executingMode === "SUBMIT" ? <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-400" /> : <Send className="w-3.5 h-3.5 text-emerald-400" />}
+          <span className="text-emerald-500/40 select-none ml-1">]</span>
         </button>
       </div>
     </div>

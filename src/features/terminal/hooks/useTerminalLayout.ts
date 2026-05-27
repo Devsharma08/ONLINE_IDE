@@ -18,6 +18,7 @@ export const useTerminalLayout = () => {
     event.preventDefault();
     document.body.style.userSelect = "none";
     document.body.style.cursor = "col-resize";
+    document.body.classList.add("dragging-active");
   }, []);
 
   const startOutputDragging = useCallback((event: MouseEvent<HTMLDivElement>) => {
@@ -27,6 +28,7 @@ export const useTerminalLayout = () => {
     event.preventDefault();
     document.body.style.userSelect = "none";
     document.body.style.cursor = "row-resize";
+    document.body.classList.add("dragging-active");
   }, [outputHeight]);
 
   useEffect(() => {
@@ -34,7 +36,7 @@ export const useTerminalLayout = () => {
       if (!isSidebarDragging) return;
 
       window.requestAnimationFrame(() => {
-        const maxSidebarWidth = Math.max(30, window.innerWidth - 420);
+        const maxSidebarWidth = Math.max(30, window.innerWidth/2);
         const nextWidth = Math.max(30, Math.min(event.clientX, maxSidebarWidth));
         setSidebarWidth(nextWidth);
       });
@@ -44,6 +46,7 @@ export const useTerminalLayout = () => {
       setIsSidebarDragging(false);
       document.body.style.userSelect = "auto";
       document.body.style.cursor = "default";
+      document.body.classList.remove("dragging-active");
     };
 
     if (isSidebarDragging) {
@@ -77,6 +80,7 @@ export const useTerminalLayout = () => {
       setIsOutputDragging(false);
       document.body.style.userSelect = "auto";
       document.body.style.cursor = "default";
+      document.body.classList.remove("dragging-active");
     };
 
     if (isOutputDragging) {

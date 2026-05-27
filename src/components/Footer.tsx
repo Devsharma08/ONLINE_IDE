@@ -3,39 +3,39 @@ import { Link } from 'react-router-dom'
 
 const Footer = () => {
   return (
-    <footer className="w-full border-t border-white/10 bg-darkbg/40 backdrop-blur-md mt-auto relative z-10">
-      <div className="max-w-7xl mx-auto px-6 py-10 flex flex-col md:flex-row items-center justify-between gap-6">
+    <footer className="w-full border-t border-white/5 bg-black/40 backdrop-blur-md mt-auto relative z-10 font-mono text-xs">
+      <div className="max-w-7xl mx-auto px-6 py-8 flex flex-col md:flex-row items-center justify-between gap-6">
         
         <div className="flex flex-col items-center md:items-start text-center md:text-left">
-          <span className="text-xl font-bold tracking-tight text-textwhite bg-clip-text">
-            DSA<span className="text-indigo-400">Hub</span>
+          <span className="text-sm font-bold tracking-widest text-white">
+            DSA // <span className="text-cyan-400">HUB</span>
           </span>
-          <p className="text-sm text-textdimwhite mt-1">
-            Bridging the gap between learning and doing.
+          <p className="text-[10px] text-slate-500 mt-1 uppercase">
+            BRIDGING_THE_GAP_BETWEEN_LEARNING_AND_DOING
           </p>
         </div>
 
-        <div className="flex flex-wrap justify-center items-center gap-8">
-          <Link to="/" className="text-textdimwhite hover:text-white transition-colors text-sm font-medium">Home</Link>
-          <Link to="/about" className="text-textdimwhite hover:text-white transition-colors text-sm font-medium">About</Link>
-          <a href="https://github.com/Devsharma08/DSA-LEETCODE" target="_blank" rel="noreferrer" className="text-textdimwhite hover:text-white transition-colors text-sm font-medium">Repository</a>
+        <div className="flex flex-wrap justify-center items-center gap-6">
+          <Link to="/" className="text-slate-400 hover:text-cyan-400 transition-colors uppercase">[ HOME ]</Link>
+          <Link to="/about" className="text-slate-400 hover:text-cyan-400 transition-colors uppercase">[ ABOUT ]</Link>
+          <a href="https://github.com/Devsharma08/DSA-LEETCODE" target="_blank" rel="noreferrer" className="text-slate-400 hover:text-cyan-400 transition-colors uppercase">[ REPOSITORY ]</a>
         </div>
 
-        <div className="flex items-center gap-5">
-          <a href="https://github.com/Devsharma08/DSA-LEETCODE" target="_blank" rel="noreferrer" className="text-textdimwhite hover:text-white transition-colors">
+        <div className="flex items-center gap-4">
+          <a href="https://github.com/Devsharma08/DSA-LEETCODE" target="_blank" rel="noreferrer" className="text-slate-400 hover:text-cyan-400 transition-colors">
             <span className="sr-only">GitHub</span>
-            <Github className="w-5 h-5" />
+            <Github className="w-4 h-4" />
           </a>
-          <a href="#" className="text-textdimwhite hover:text-white transition-colors">
+          <a href="#" className="text-slate-400 hover:text-cyan-400 transition-colors">
             <span className="sr-only">Twitter</span>
-            <Twitter className="w-5 h-5" />
+            <Twitter className="w-4 h-4" />
           </a>
         </div>
       </div>
       
-      <div className="w-full border-t border-white/5 py-6 text-center">
-        <p className="text-xs text-textdimwhite/50">
-          &copy; {new Date().getFullYear()} DSAHub. Open source and built for developers.
+      <div className="w-full border-t border-white/5 py-4 text-center">
+        <p className="text-[9px] text-slate-600 uppercase">
+          &copy; {new Date().getFullYear()} DSAHUB. OPEN_SOURCE // BUILT_FOR_DEVELOPERS.
         </p>
       </div>
     </footer>

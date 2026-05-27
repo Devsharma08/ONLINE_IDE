@@ -6,12 +6,12 @@ import Footer from './Footer'
 const BackgroundShapes = () => (
   <div className="fixed inset-0 w-full h-full pointer-events-none z-0 overflow-hidden">
     {/* Glowing Orbs for ambiance */}
-    <div className="absolute top-[-10%] left-[-10%] w-[50vw] h-[50vw] max-w-[600px] max-h-[600px] rounded-full bg-indigo-600/10 blur-[120px]" />
-    <div className="absolute bottom-[-10%] right-[-10%] w-[40vw] h-[40vw] max-w-[500px] max-h-[500px] rounded-full bg-purple-600/10 blur-[100px]" />
+    <div className="absolute top-[-10%] left-[-10%] w-[50vw] h-[50vw] max-w-[600px] max-h-[600px] rounded-full bg-cyan-500/5 blur-[120px]" />
+    <div className="absolute bottom-[-10%] right-[-10%] w-[40vw] h-[40vw] max-w-[500px] max-h-[500px] rounded-full bg-teal-500/5 blur-[100px]" />
 
     {/* Decorative Animated Circle SVG */}
     <svg 
-      className="absolute top-[15%] left-[5%] w-[30vw] h-[30vw] min-w-[300px] min-h-[300px] text-indigo-400/20 animate-[spin_40s_linear_infinite]" 
+      className="absolute top-[15%] left-[5%] w-[30vw] h-[30vw] min-w-[300px] min-h-[300px] text-cyan-400/10 animate-[spin_40s_linear_infinite]" 
       viewBox="0 0 100 100"
       fill="none"
     >
@@ -22,7 +22,7 @@ const BackgroundShapes = () => (
 
     {/* Decorative Animated Rectangle SVG */}
     <svg 
-      className="absolute bottom-[10%] right-[5%] w-[35vw] h-[35vw] min-w-[350px] min-h-[350px] text-purple-400/20 animate-[spin_50s_linear_infinite_reverse]" 
+      className="absolute bottom-[10%] right-[5%] w-[35vw] h-[35vw] min-w-[350px] min-h-[350px] text-teal-400/10 animate-[spin_50s_linear_infinite_reverse]" 
       viewBox="0 0 100 100"
       fill="none"
     >

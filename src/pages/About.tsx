@@ -2,48 +2,46 @@ import { Info, IceCream as Github, User, Heart } from 'lucide-react'
 
 const About = () => {
   return (
-    <section className="relative flex h-full flex-col items-center overflow-hidden px-4 pt-24 sm:px-6">
+    <section className="relative flex h-full flex-col items-center overflow-hidden px-4 pt-24 sm:px-6 font-mono">
 
       <div className="z-10 mb-12 flex w-full max-w-4xl flex-col items-center text-center sm:mb-16">
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-sm text-indigo-300 mb-6 backdrop-blur-sm shadow-[0_0_15px_rgba(255,255,255,0.05)] cursor-default">
-          <Info className="w-4 h-4" />
-          About This Project
+        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-none border border-cyan-500/20 bg-cyan-950/5 text-xs text-cyan-400 uppercase tracking-wider mb-6 cursor-default">
+          <Info className="w-3.5 h-3.5" />
+          SYS // ABOUT_DSA_HUB
         </div>
         
-        <h1 className="mb-6 text-3xl font-bold tracking-tight text-textwhite sm:text-4xl md:text-6xl">
-          Bridging the Gap Between <br/>
-          <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-500">Learning & Doing</span>
+        <h1 className="mb-6 text-3xl font-extrabold tracking-tight text-white sm:text-4xl md:text-5xl uppercase">
+          BRIDGING_THE_GAP_BETWEEN <br/>
+          <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-teal-400">LEARNING_&_DOING</span>
         </h1>
         
-        <p className="max-w-2xl text-base leading-relaxed text-textdimwhite sm:text-lg">
+        <p className="max-w-2xl text-xs leading-relaxed text-slate-400 sm:text-sm uppercase tracking-wide">
           DSAHub is an open-source platform designed to make exploring Data Structures and Algorithms seamless. By connecting directly to GitHub, it provides a real-time, cached, and interactive way to study code.
         </p>
       </div>
 
-      <div className="relative z-10 w-full max-w-3xl rounded-2xl border border-white/10 bg-white/[0.02] p-5 shadow-2xl backdrop-blur-md sm:p-8 md:p-12">
-        <div className="absolute inset-0 bg-gradient-to-b from-white/[0.05] to-transparent rounded-3xl pointer-events-none" />
-        
+      <div className="relative z-10 w-full max-w-3xl rounded-none border border-white/5 bg-black/40 p-5 backdrop-blur-md sm:p-8 md:p-12">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-10 relative z-10">
           <div className="flex flex-col gap-4">
-            <div className="w-12 h-12 rounded-xl bg-indigo-500/20 flex items-center justify-center border border-indigo-500/30 text-indigo-300">
-              <User className="w-6 h-6" />
+            <div className="w-12 h-12 rounded-none bg-cyan-950/15 flex items-center justify-center border border-cyan-500/30 text-cyan-400">
+              <User className="w-5 h-5" />
             </div>
-            <h3 className="text-2xl font-semibold text-textwhite">The Creator</h3>
-            <p className="text-textdimwhite leading-relaxed">
+            <h3 className="text-lg font-bold text-white uppercase tracking-wider">// THE_CREATOR</h3>
+            <p className="text-slate-400 text-xs leading-relaxed uppercase">
               Built by Dev Sharma as a way to share coding solutions and experiment with modern web technologies, combining the power of GitHub APIs with high-performance caching.
             </p>
           </div>
 
           <div className="flex flex-col gap-4">
-            <div className="w-12 h-12 rounded-xl bg-pink-500/20 flex items-center justify-center border border-pink-500/30 text-pink-300">
-              <Heart className="w-6 h-6" />
+            <div className="w-12 h-12 rounded-none bg-rose-950/15 flex items-center justify-center border border-rose-500/30 text-rose-400">
+              <Heart className="w-5 h-5" />
             </div>
-            <h3 className="text-2xl font-semibold text-textwhite">Open Source</h3>
-            <p className="text-textdimwhite leading-relaxed">
+            <h3 className="text-lg font-bold text-white uppercase tracking-wider">// OPEN_SOURCE</h3>
+            <p className="text-slate-400 text-xs leading-relaxed uppercase">
               Everything you see here is open-source. We believe that coding education should be accessible and visually engaging for everyone.
             </p>
-            <a href="https://github.com/Devsharma08/DSA-LEETCODE" target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 mt-2 text-indigo-400 hover:text-indigo-300 transition-colors font-medium w-fit">
-              <Github className="w-4 h-4" /> View Repository
+            <a href="https://github.com/Devsharma08/DSA-LEETCODE" target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 mt-2 text-cyan-400 hover:text-cyan-300 transition-colors font-bold text-xs uppercase tracking-wider w-fit">
+              <Github className="w-4 h-4" /> <span>[ VIEW_REPOSITORY ]</span>
             </a>
           </div>
         </div>

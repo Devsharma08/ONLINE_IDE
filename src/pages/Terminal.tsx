@@ -80,7 +80,7 @@ const Terminal = () => {
 
    const {
       outputHeight,
-      sidebarWidth,
+      sidebarWidth,  
       setOutputHeight,
       startOutputDragging,
       startSidebarDragging,
@@ -122,14 +122,14 @@ const Terminal = () => {
    }
    
    // move to previous file state 
-   const checkIfFileIdInLocalStorage = (oid: string | null): boolean => {
+   const checkIfFileIdInLocalStorage = useCallback((oid: string | null): boolean => {
       if (!oid) return false;
       if(oid.startsWith(LOCAL_FILE_ID_PREFIX)) {
          const localFile = readLocalFile(oid);
          return Boolean(localFile);
       }
       return false;
-   };
+   },[]);
 
     const handleResetCode = useCallback(async () => {
        if (!activeFile) return;
@@ -167,8 +167,8 @@ const Terminal = () => {
     }, [activeFile, setContextCode]);
 
 
-   const createFileInLocalStorage = (name: string, language: SupportedLanguage): string => {
-      if(!checkIfFileIdInLocalStorage(activeFile)) {
+   const createFileInLocalStorage = useCallback((name: string, language: SupportedLanguage): string => {
+      if(checkIfFileIdInLocalStorage(activeFile)) {
          const oid = `${LOCAL_FILE_ID_PREFIX}${crypto.randomUUID?.() ?? Date.now().toString()}`;
          const localFile = {
             name,
@@ -180,7 +180,7 @@ const Terminal = () => {
          localStorage.setItem(getLocalStorageKey(oid), JSON.stringify(localFile));
          return oid;
       }
-   };
+   },[activeFile,checkIfFileIdInLocalStorage])
    
 
    const handleFormatCode = useCallback(() => {
@@ -457,7 +457,7 @@ const Terminal = () => {
    };
 
    return (
-      <div className='flex h-[100dvh] min-h-screen flex-col overflow-hidden bg-[#1e1e1e] text-white md:flex-row'>
+      <div className='flex h-[100dvh] min-h-screen flex-col overflow-hidden bg-[#08090a] fui-grid-bg text-white md:flex-row'>
          <FileExplorer
             activeFile={activeFile}
             files={filesData}
@@ -475,10 +475,10 @@ const Terminal = () => {
             setSelectedMode={setSelectedMode}
          />
 
-         <main className='flex min-h-0 min-w-0 flex-1 flex-col'>
-            <div className="flex w-full items-center justify-between gap-3 border-b border-white/10 bg-[#151515] px-3 py-2 text-xs text-slate-300 sm:px-4 sm:text-sm">
-               <span className="font-medium">Terminal Workspace</span>
-               <span className="truncate text-slate-500">{filesLoading ? "Syncing files..." : activeFileName}</span>
+         <main className='flex min-h-0 min-w-0 flex-1 flex-col bg-black/40'>
+            <div className="flex w-full items-center justify-between gap-3 border-b border-white/5 bg-[#0b0c0e] px-3 py-2 text-xs font-mono text-cyan-400/80 sm:px-4">
+               <span>SYS // TERMINAL_WORKSPACE</span>
+               <span className="truncate text-slate-500 uppercase">{filesLoading ? "SYNCING..." : activeFileName}</span>
             </div>
 
             <div className='flex-1 min-h-0 relative'>

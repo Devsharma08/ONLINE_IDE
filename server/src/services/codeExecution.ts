@@ -102,9 +102,14 @@ const getJavaMainWrapper = () => `public class Main {
     Object[] args = new Object[paramTypes.length];
     for (int i = 0; i < paramTypes.length; i++) {
       if (i >= lines.length) {
-        throw new IllegalArgumentException("Not enough input lines for solution arguments");
+        throw new IllegalArgumentException("Not enough input lines. Required " + paramTypes.length + " parameters, but received only " + lines.length);
       }
-      args[i] = parseValue(lines[i], paramTypes[i]);
+      try {
+        args[i] = parseValue(lines[i], paramTypes[i]);
+      } catch (Exception e) {
+        String typeName = paramTypes[i] instanceof Class<?> ? ((Class<?>)paramTypes[i]).getSimpleName() : paramTypes[i].toString();
+        throw new IllegalArgumentException("Parameter mismatch at index " + i + ": Unable to parse '" + lines[i] + "' as type '" + typeName + "'. Make sure inputs match the problem signature. Error: " + e.getMessage(), e);
+      }
     }
     return args;
   }
@@ -612,9 +617,11 @@ export const executeCode = async (req: Request, res: Response) => {
       mode: executionMode,
       totalCases: casesToRun.length,
       passedCases: totalPassed,
+      passed: useCustomInput ? true : totalPassed === casesToRun.length,
       status: useCustomInput ? "COMPLETED" : totalPassed === casesToRun.length ? "PASSED" : "FAILED",
       problemId: useCustomInput ? "" : testCases[0]?.problemId || "",
       details: results,
+      error: results.find((r) => r.runtimeError)?.runtimeError || null,
       execution_status:totalPassed === casesToRun.length ? "SUCCESS" : 'ERROR',
     });
   } catch (error) {
@@ -743,9 +750,11 @@ export const executeCode = async (req: Request, res: Response) => {
           mode: executionMode,
           totalCases: testCasesToRun.length,
           passedCases: localPassedCount,
+          passed: useCustomInput ? true : localPassedCount === testCasesToRun.length,
           status: useCustomInput ? "COMPLETED" : localPassedCount === testCasesToRun.length ? "PASSED" : "FAILED",
           problemId: useCustomInput ? "" : testCases[0]?.problemId || "",
           details: localResults,
+          error: localResults.find((r) => r.runtimeError)?.runtimeError || null,
           execution_status:localPassedCount === testCasesToRun.length ? "SUCCESS" : 'ERROR',
         });
       } catch (sandboxErr) {

@@ -3,34 +3,33 @@ import { Link } from "react-router-dom";
 
 const HeroSection = () => {
   return (
-    <div className="z-10 flex min-h-[72vh] w-full max-w-4xl flex-col items-center justify-center pb-16 text-center sm:min-h-[80vh] sm:pb-20">
-      <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-sm text-indigo-300 mb-8 backdrop-blur-sm shadow-[0_0_15px_rgba(255,255,255,0.05)] cursor-default">
-        <span className="flex h-2 w-2 rounded-full bg-indigo-500 animate-pulse"></span>
-        Live DSA Solutions
+    <div className="z-10 flex min-h-[72vh] w-full max-w-4xl flex-col items-center justify-center pb-16 text-center sm:min-h-[80vh] sm:pb-20 font-mono">
+      <div className="inline-flex items-center gap-2 px-3 py-1 rounded-none border border-cyan-500/20 bg-cyan-950/5 text-xs text-cyan-400 uppercase tracking-wider mb-8">
+        <span className="flex h-1.5 w-1.5 rounded-full bg-cyan-500 animate-ping"></span>
+        SYS // LIVE_DSA_RUNTIME_SOLUTIONS
       </div>
 
-      <h1 className="mb-6 bg-gradient-to-r from-textwhite via-textlightwhite to-textgray bg-clip-text text-4xl font-extrabold tracking-tight text-transparent drop-shadow-sm sm:text-5xl md:text-7xl">
-        Master Algorithms <br />
-        <span className="bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-500">One File at a Time</span>
+      <h1 className="mb-6 bg-gradient-to-r from-white via-slate-300 to-slate-500 bg-clip-text text-3xl font-extrabold tracking-tight text-transparent drop-shadow-sm sm:text-5xl md:text-6xl uppercase">
+        MASTER_ALGORITHMS <br />
+        <span className="bg-clip-text bg-gradient-to-r from-cyan-400 to-teal-400">ONE_FILE_AT_A_TIME</span>
       </h1>
 
-      <p className="mb-10 max-w-2xl text-base leading-relaxed text-textdimwhite sm:text-lg md:text-xl">
-        Explore a carefully curated collection of Data Structures and Algorithms solutions. Browse the file tree, read the code, and elevate your problem-solving skills.
+      <p className="mb-10 max-w-2xl text-xs leading-relaxed text-slate-400 sm:text-sm uppercase tracking-wide">
+        Explore a carefully curated collection of Data Structures and Algorithms solutions. Browse the monospaced file tree, analyze structural complexity, and run compilations inside sandboxed system runtimes.
       </p>
 
       <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
         <Link
           to="/terminal"
-          className="group relative px-8 py-3 bg-indigo-500 hover:bg-indigo-600 text-white font-semibold rounded-xl transition-all duration-300 shadow-[0_0_20px_rgba(99,102,241,0.4)] hover:shadow-[0_0_30px_rgba(99,102,241,0.6)] flex items-center justify-center gap-2 overflow-hidden"
+          className="group relative px-6 py-2.5 border border-cyan-500/30 bg-cyan-950/10 hover:border-cyan-400 hover:bg-cyan-950/20 text-cyan-400 font-bold transition-all duration-300 flex items-center justify-center gap-2"
         >
-          <span className="relative z-10 flex items-center gap-2">
-            Browse Files <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-          </span>
+          <span>[ BROWSE_WORKSPACE ]</span>
+          <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
         </Link>
 
-        <button className="px-8 py-3 bg-white/5 hover:bg-white/10 border border-white/10 text-textwhite font-semibold rounded-xl transition-all duration-300 hover:shadow-[0_0_15px_rgba(255,255,255,0.05)] flex items-center justify-center gap-2">
-          <GitBranch className="w-4 h-4 text-textdimwhite" />
-          View Commits
+        <button className="px-6 py-2.5 border border-white/5 bg-black/40 hover:border-white/10 text-slate-400 hover:text-slate-200 font-bold transition-all duration-300 flex items-center justify-center gap-2 cursor-pointer">
+          <GitBranch className="w-3.5 h-3.5 text-slate-500" />
+          <span>[ VIEW_SOURCE ]</span>
         </button>
       </div>
     </div>

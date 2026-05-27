@@ -8,21 +8,23 @@ const Header = () => {
    const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   return (
-    <nav className={`fixed top-0 right-0 left-0  z-50 glass-dark glass-rim backdrop-blur-md backdrop-saturate-150 py-4 px-6 w-full shadow-sm shadow-white/5 bg-darkbg/60 border-b border-white/10 transition-transform duration-100 ${direction === 'down' ? '-translate-y-full' : 'translate-y-0'}`}>
-      <div className='flex items-center max-w-7xl mx-auto font-bold justify-between'>
-         <Link to="/" onClick={() => setIsMenuOpen(false)} className='flex items-center gap-3 group'>
-            <div className='bg-gradient-to-br from-indigo-500 to-purple-600 p-2 rounded-xl group-hover:shadow-[0_0_15px_rgba(168,85,247,0.5)] transition-all duration-300'>
-               <Terminal className='w-5 h-5 text-textwhite' />
+    <nav className={`fixed top-0 right-0 left-0 z-50 backdrop-blur-md backdrop-saturate-150 py-4 px-6 w-full shadow-none bg-black/60 border-b border-white/5 font-mono text-xs transition-transform duration-100 ${direction === 'down' ? '-translate-y-full' : 'translate-y-0'}`}>
+      <div className='flex items-center max-w-7xl mx-auto justify-between'>
+         <Link to="/" onClick={() => setIsMenuOpen(false)} className='flex items-center gap-2.5 group'>
+            <div className='border border-cyan-500/30 bg-cyan-950/10 p-2 rounded-none transition-all duration-300 group-hover:border-cyan-400 group-hover:bg-cyan-950/20'>
+               <Terminal className='w-4 h-4 text-cyan-400' />
             </div>
-            <span className='text-xl tracking-tight text-textwhite bg-clip-text'>DSA<span className='text-indigo-400'>Hub</span></span>
+            <span className='text-sm uppercase tracking-widest text-white font-bold'>
+               DSA // <span className='text-cyan-400'>HUB</span>
+            </span>
          </Link>
          
-         <div className='hidden wmd:flex items-center text-sm font-medium space-x-8'>
-            <Link to="/terminal" className='text-textdimwhite hover:text-textwhite transition-colors duration-200 relative after:content-[""] after:absolute after:-bottom-1 after:left-0 after:w-0 after:h-0.5 after:bg-indigo-400 after:transition-all after:duration-300 hover:after:w-full'>Terminal</Link>
-            <Link to="/about" className='text-textdimwhite hover:text-textwhite transition-colors duration-200 relative after:content-[""] after:absolute after:-bottom-1 after:left-0 after:w-0 after:h-0.5 after:bg-indigo-400 after:transition-all after:duration-300 hover:after:w-full'>About</Link>
-            <a href="https://github.com/Devsharma08/DSA-LEETCODE" target="_blank" rel="noreferrer" className='flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full transition-all duration-300 hover:shadow-[0_0_15px_rgba(255,255,255,0.1)] text-textwhite'>
-               <IdCardLanyard className='w-4 h-4' />
-               <span>GitHub</span>
+         <div className='hidden wmd:flex items-center space-x-6'>
+            <Link to="/terminal" className='text-slate-400 hover:text-cyan-400 transition-colors duration-200 uppercase tracking-wider'>[ TERMINAL ]</Link>
+            <Link to="/about" className='text-slate-400 hover:text-cyan-400 transition-colors duration-200 uppercase tracking-wider'>[ ABOUT ]</Link>
+            <a href="https://github.com/Devsharma08/DSA-LEETCODE" target="_blank" rel="noreferrer" className='flex items-center gap-2 px-3 py-1.5 bg-cyan-950/10 hover:bg-cyan-950/20 border border-cyan-500/30 hover:border-cyan-400 rounded-none transition-all duration-300 text-cyan-400 uppercase tracking-wider'>
+               <IdCardLanyard className='w-3.5 h-3.5' />
+               <span>GITHUB</span>
             </a>
          </div>
          <button
@@ -30,18 +32,18 @@ const Header = () => {
             aria-label={isMenuOpen ? "Close navigation menu" : "Open navigation menu"}
             aria-expanded={isMenuOpen}
             onClick={() => setIsMenuOpen((open) => !open)}
-            className='wmd:hidden block p-2 rounded-lg bg-white/5 border border-white/10 text-textwhite cursor-pointer hover:bg-white/10 transition-all'
+            className='wmd:hidden block p-2 rounded-none bg-black/40 border border-white/10 text-cyan-400 cursor-pointer hover:bg-cyan-950/10 transition-all'
          >
-            {isMenuOpen ? <X className='w-5 h-5'/> : <MenuIcon className='w-5 h-5'/>}
+            {isMenuOpen ? <X className='w-4 h-4'/> : <MenuIcon className='w-4 h-4'/>}
          </button>
       </div>
       {isMenuOpen ? (
-         <div className="wmd:hidden mx-auto mt-4 grid max-w-7xl gap-2 border-t border-white/10 pt-4 text-sm font-medium">
-            <Link to="/terminal" onClick={() => setIsMenuOpen(false)} className='rounded-lg px-3 py-3 text-textdimwhite hover:bg-white/5 hover:text-textwhite transition-colors duration-200'>Terminal</Link>
-            <Link to="/about" onClick={() => setIsMenuOpen(false)} className='rounded-lg px-3 py-3 text-textdimwhite hover:bg-white/5 hover:text-textwhite transition-colors duration-200'>About</Link>
-            <a href="https://github.com/Devsharma08/DSA-LEETCODE" target="_blank" rel="noreferrer" className='flex items-center gap-2 rounded-lg px-3 py-3 text-textdimwhite hover:bg-white/5 hover:text-textwhite transition-colors duration-200'>
-               <IdCardLanyard className='w-4 h-4' />
-               <span>GitHub</span>
+         <div className="wmd:hidden mx-auto mt-4 grid max-w-7xl gap-1.5 border-t border-white/5 pt-4 text-xs font-mono">
+            <Link to="/terminal" onClick={() => setIsMenuOpen(false)} className='rounded-none px-3 py-2 text-slate-400 hover:bg-cyan-950/5 hover:text-cyan-400 border border-transparent hover:border-cyan-500/20 transition-all uppercase'>[ TERMINAL ]</Link>
+            <Link to="/about" onClick={() => setIsMenuOpen(false)} className='rounded-none px-3 py-2 text-slate-400 hover:bg-cyan-950/5 hover:text-cyan-400 border border-transparent hover:border-cyan-500/20 transition-all uppercase'>[ ABOUT ]</Link>
+            <a href="https://github.com/Devsharma08/DSA-LEETCODE" target="_blank" rel="noreferrer" className='flex items-center gap-2 rounded-none px-3 py-2 text-slate-400 hover:bg-cyan-950/5 hover:text-cyan-400 border border-transparent hover:border-cyan-500/20 transition-all uppercase'>
+               <IdCardLanyard className='w-3.5 h-3.5' />
+               <span>GITHUB</span>
             </a>
          </div>
       ) : null}
