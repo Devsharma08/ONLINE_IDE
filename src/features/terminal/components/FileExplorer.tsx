@@ -1,3 +1,4 @@
+import { useSearchParams } from "react-router-dom";
 import { FileCode, FilePenIcon as CreateFileIcon, Loader2, X } from "lucide-react";
 import React,{ useEffect, useMemo, useState, type CSSProperties, type KeyboardEvent, type MouseEvent, type ChangeEvent, useCallback } from "react";
 import type { FileEntry } from "../../../context/fileNamesContext";
@@ -26,6 +27,10 @@ type SidebarFilesModeProps = {
   isSmall: boolean;
   difficultyFilter: "ALL" | "EASY" | "MEDIUM" | "HARD";
   setDifficultyFilter: (filter: "ALL" | "EASY" | "MEDIUM" | "HARD") => void;
+  categoryFilter: string;
+  setCategoryFilter: (val: string) => void;
+  languageFilter: string;
+  setLanguageFilter: (val: string) => void;
   files: FileEntry[];
   fileData: FileContentResponse | null;
   language: string;
@@ -46,6 +51,10 @@ const SidebarFilesMode = React.memo(({
   isSmall,
   difficultyFilter,
   setDifficultyFilter,
+  categoryFilter,
+  setCategoryFilter,
+  languageFilter,
+  setLanguageFilter,
   files,
   fileData,
   language,
@@ -101,6 +110,53 @@ const SidebarFilesMode = React.memo(({
                   })}
                 </div>
 
+                {/* Dynamic category and language selector dropdowns */}
+                {!isSmall && (
+                  <div className="flex gap-2 relative">
+                    <div className="relative flex-1">
+                      <select
+                        value={categoryFilter}
+                        onChange={(e) => setCategoryFilter(e.target.value)}
+                        className="w-full rounded-none border border-white/10 bg-black/60 px-2.5 py-1.5 text-[9px] font-mono text-cyan-400/80 outline-none transition focus:border-cyan-500/40 focus:ring-1 focus:ring-cyan-500/10 cursor-pointer uppercase appearance-none hover:text-cyan-400 hover:border-cyan-500/30"
+                      >
+                        <option value="ALL">SYS // CATEGORIES</option>
+                        <option value="linked list">LINKED LIST</option>
+                        <option value="array">ARRAY</option>
+                        <option value="string">STRING</option>
+                        <option value="math">MATH</option>
+                        <option value="graph">GRAPH</option>
+                        <option value="queue">QUEUE</option>
+                        <option value="stack">STACK</option>
+                        <option value="tree">TREE</option>
+                        <option value="dynamic prog">DYNAMIC PROG</option>
+                        <option value="recursion">RECURSION</option>
+                        <option value="backtracking">BACKTRACKING</option>
+                        <option value="searching">SEARCHING</option>
+                        <option value="greedy">GREEDY</option>
+                        <option value="interval problems">INTERVAL PROBLEMS</option>
+                      </select>
+                      <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2.5 text-[8px] text-cyan-500/40 select-none">
+                        ▼
+                      </div>
+                    </div>
+
+                    <div className="relative flex-1">
+                      <select
+                        value={languageFilter}
+                        onChange={(e) => setLanguageFilter(e.target.value)}
+                        className="w-full rounded-none border border-white/10 bg-black/60 px-2.5 py-1.5 text-[9px] font-mono text-cyan-400/80 outline-none transition focus:border-cyan-500/40 focus:ring-1 focus:ring-cyan-500/10 cursor-pointer uppercase appearance-none hover:text-cyan-400 hover:border-cyan-500/30"
+                      >
+                        <option value="ALL">SYS // LANGUAGES</option>
+                        <option value="java">JAVA</option>
+                        <option value="javascript">JAVASCRIPT</option>
+                      </select>
+                      <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2.5 text-[8px] text-cyan-500/40 select-none">
+                        ▼
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex sidebar-details items-center justify-between gap-1 text-[9px] font-mono text-slate-500 tracking-wider">
                   <span>
                     {searchActive
@@ -134,7 +190,14 @@ const SidebarFilesMode = React.memo(({
                         <FileCode className="file-icon h-3.5 w-3.5 text-cyan-400/60 group-hover:text-cyan-400 flex-shrink-0" />
                         <span className="file-name-text font-medium truncate">{file.name}</span>
                       </div>
-                      <DifficultyBadge level={file.difficulty_level || file.diffculty_level || "E"} />
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        {file.data_structure && !isSmall && (
+                          <span className="rounded-none border border-white/10 bg-black/60 px-1 py-0.5 text-[7px] uppercase tracking-wider text-slate-500 font-mono font-normal">
+                            {file.data_structure}
+                          </span>
+                        )}
+                        <DifficultyBadge level={file.difficulty_level || file.diffculty_level || "E"} />
+                      </div>
                     </button>
                   ))
                 ) : (
@@ -161,6 +224,11 @@ const SidebarFilesMode = React.memo(({
                   <span className="rounded-none border border-white/10 bg-black/40 px-2 py-0.5 text-[9px] uppercase tracking-wider text-cyan-400/60 font-mono">
                     {language.toUpperCase() || ""}
                   </span>
+                  {fileData?.data_structure && (
+                    <span className="rounded-none border border-cyan-500/25 bg-cyan-950/20 px-2 py-0.5 text-[9px] uppercase tracking-wider text-cyan-400/80 font-mono select-none">
+                      {fileData.data_structure}
+                    </span>
+                  )}
                   <DifficultyBadge level={fileData?.difficulty_level || "E"} />
                   {testCaseCount ? (
                     <span className="rounded-none border border-white/10 bg-black/40 px-2 py-0.5 text-[9px] uppercase tracking-wider text-cyan-400/60 font-mono">
@@ -385,13 +453,39 @@ const FileExplorer = ({
   difficultyFilter,
   setDifficultyFilter,
 }: FileExplorerProps) => {
+  const [searchParams] = useSearchParams();
+  const queryCategory = searchParams.get("category");
+  const queryLang = searchParams.get("lang");
+
   const [searchInput, setSearchInput] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [fileName, setFileName] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState<string>("ALL");
+  const [languageFilter, setLanguageFilter] = useState<string>("ALL");
+
+  useEffect(() => {
+    if (queryCategory) {
+      let normalized = queryCategory.toLowerCase();
+      if (normalized === "dynamic-programming") normalized = "dynamic prog";
+      if (normalized === "linked-list") normalized = "linked list";
+      setCategoryFilter(normalized);
+      setSelectedMode("files-mode");
+    }
+  }, [queryCategory, setSelectedMode]);
+
+  useEffect(() => {
+    if (queryLang) {
+      let normalized = queryLang.toLowerCase();
+      setLanguageFilter(normalized);
+      setSelectedMode("files-mode");
+    }
+  }, [queryLang, setSelectedMode]);
 
   const activeFileEntry = useMemo(() => files.find((file) => file.oid === activeFile), [files, activeFile]);
   const localFiles = useMemo(() => files.filter((file) => file.isLocal), [files]);
-  const repositoryFiles = useMemo(() => files.filter((file) => !file.isLocal), [files]);
+  const repositoryFiles = useMemo(() => {
+    return files.filter((file) => !file.isLocal && file.name.toLowerCase().startsWith("leetcode"));
+  }, [files]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -403,11 +497,30 @@ const FileExplorer = ({
 
   const filteredFiles = useMemo(() => {
     return files.filter((file) => {
-      
+      // For remote files, only render them if they are of leetcode.
+      // User-created files are rendered as is (file.isLocal).
+      if (!file.isLocal && !file.name.toLowerCase().startsWith("leetcode")) {
+        return false;
+      }
+
       if (difficultyFilter !== "ALL") {
         const fileDiff = file.difficulty_level || file.diffculty_level || "E";
         const targetDiff = difficultyFilter === "EASY" ? "E" : difficultyFilter === "MEDIUM" ? "M" : "H";
         if (fileDiff !== targetDiff) {
+          return false;
+        }
+      }
+
+      if (categoryFilter !== "ALL") {
+        const fileCat = file.data_structure?.toLowerCase() || "";
+        if (fileCat !== categoryFilter.toLowerCase()) {
+          return false;
+        }
+      }
+
+      if (languageFilter !== "ALL") {
+        const fileLang = file.language?.toLowerCase() || "";
+        if (fileLang !== languageFilter.toLowerCase()) {
           return false;
         }
       }
@@ -417,18 +530,20 @@ const FileExplorer = ({
         const name = file.name.toLowerCase();
         const path = file.path?.toLowerCase() ?? "";
         const type = file.type?.toLowerCase() ?? "";
+        const structure = file.data_structure?.toLowerCase() ?? "";
         return (
           name.includes(debouncedSearch) ||
           path.includes(debouncedSearch) ||
-          type.includes(debouncedSearch)
+          type.includes(debouncedSearch) ||
+          structure.includes(debouncedSearch)
         );
       }
 
       return true;
     });
-  }, [files, debouncedSearch, difficultyFilter]);
+  }, [files, debouncedSearch, difficultyFilter, categoryFilter, languageFilter]);
 
-  const searchActive = Boolean(searchInput.trim()) || difficultyFilter !== "ALL";
+  const searchActive = Boolean(searchInput.trim()) || difficultyFilter !== "ALL" || categoryFilter !== "ALL" || languageFilter !== "ALL";
 
   const deleteLocalFileFromStorage = useCallback((activeFileId: string) => {
     if (!activeFileId) return;
@@ -564,6 +679,10 @@ const FileExplorer = ({
             isSmall={sidebarWidth < 160}
             difficultyFilter={difficultyFilter}
             setDifficultyFilter={setDifficultyFilter}
+            categoryFilter={categoryFilter}
+            setCategoryFilter={setCategoryFilter}
+            languageFilter={languageFilter}
+            setLanguageFilter={setLanguageFilter}
             files={files}
             fileData={fileData}
             language={language}

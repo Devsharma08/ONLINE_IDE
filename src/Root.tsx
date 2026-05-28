@@ -5,6 +5,7 @@ import About from './pages/About.tsx'
 import AppLoader from './components/AppLoader.tsx'
 import Home from './pages/Home.tsx'
 import Terminal from './pages/Terminal.tsx'
+import DataStructureDetail from './pages/DataStructureDetail.tsx'
 
 // content import's
 import { CodeContext, type TestCase } from './context/codeContext.tsx'
@@ -33,6 +34,7 @@ const Root = () => {
             <Route path="/" element={<App />}>
               <Route index element={<Home />} />
               <Route path="about" element={<About />} />
+              <Route path="ds/:slug" element={<DataStructureDetail />} />
               <Route
                 path="terminal"
                 element={

@@ -10,14 +10,15 @@ type LanguageMeta = {
   color: string | null;
 };
 
-const checkDiffuclty=(name:string,arr:string[])=>{
-  for(let i=0;i<arr.length;i++){
-    if(name.endsWith(arr[i])){
-      return arr[i];
+const checkDiffuclty = (name: string, arr: string[]): string => {
+  for (let i = 0; i < arr.length; i++) {
+    const val = arr[i];
+    if (val && name.endsWith(val)) {
+      return val;
     }
   }
   return 'E';
-}
+};
 
 export const getFileNames = async (_req: Request, res: Response) => {
   try {
@@ -61,6 +62,11 @@ export const getFileNames = async (_req: Request, res: Response) => {
       return res.status(404).json({ error: "Repository structure data not found" });
     }
 
+    // Keep only LeetCode challenge templates of type blob
+    const leetcodeEntries = entries.filter(
+      (item) => item.type === "blob" && item.name.toLowerCase().startsWith("leetcode")
+    );
+
     const languageMap = new Map<string, LanguageMeta>();
     for (const edge of languagesData ?? []) {
       languageMap.set(edge.node.name.toLowerCase(), {
@@ -69,7 +75,18 @@ export const getFileNames = async (_req: Request, res: Response) => {
       });
     }
 
-    const unifiedResponse = entries.map((item) => {
+    const dbProblemsList = await prisma.problem.findMany({
+      select: { name: true, difficulty_level: true, data_structure: true }
+    });
+    const dbProblemMap = new Map<string, { difficulty_level: string; data_structure: string | null }>();
+    for (const p of dbProblemsList) {
+      dbProblemMap.set(p.name.toLowerCase(), {
+        difficulty_level: p.difficulty_level,
+        data_structure: p.data_structure
+      });
+    }
+
+    const unifiedResponse = leetcodeEntries.map((item) => {
       let matchedLanguage: string | null;
       let difficulty: string = 'E';
 
@@ -84,6 +101,15 @@ export const getFileNames = async (_req: Request, res: Response) => {
 
       const langMeta = matchedLanguage ? languageMap.get(matchedLanguage.toLowerCase()) : null;
 
+      const baseName = item.name.split(".")[0]?.toLowerCase() || "";
+      const dbProblem = dbProblemMap.get(baseName);
+      const dataStructure = dbProblem?.data_structure || null;
+
+      let mappedDifficulty = difficulty;
+      if (dbProblem?.difficulty_level) {
+        mappedDifficulty = dbProblem.difficulty_level === "HARD" ? "H" : dbProblem.difficulty_level === "MEDIUM" ? "M" : "E";
+      }
+
       return {
         name: item.name,
         type: item.type,
@@ -91,7 +117,8 @@ export const getFileNames = async (_req: Request, res: Response) => {
         language: matchedLanguage || "Unknown",
         size: langMeta?.size ?? 0,
         color: langMeta?.color || "#cccccc",
-        difficulty_level: difficulty
+        difficulty_level: mappedDifficulty,
+        data_structure: dataStructure
       };
     });
 
@@ -107,7 +134,7 @@ export const getFileNames = async (_req: Request, res: Response) => {
         }
 
         const updatePromises: Promise<unknown>[] = [];
-        for (const item of entries) {
+        for (const item of leetcodeEntries) {
           if (item.type !== "blob") continue;
           const baseName = item.name.split(".")[0]?.toLowerCase();
           if (!baseName) continue;

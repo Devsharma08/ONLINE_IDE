@@ -69,7 +69,7 @@ const extractJsExportName = (wrapperCode: string): string | null => {
   return match ? match[1] ?? null : null;
 };
 
-const getJavaScriptRunner = (exportName: string) => `const fs = require("fs");\nconst path = require("path");\nconst exported = require("./index.js");\nconst fn = typeof exported === "function" ? exported : exported && typeof exported === "object" ? exported["${exportName}"] || exported[Object.keys(exported)[0]] : null;\nif (typeof fn !== "function") {\n  throw new Error("Could not resolve exported function for execution");\n}\nconst rawInput = fs.readFileSync(path.join(__dirname, "input.txt"), "utf8");\nconst lines = rawInput.replace(/\\r\\n/g, "\\n").split("\\n").filter((line) => line.length > 0);\nconst parseValue = (value) => {\n  const trimmed = value.trim();\n  if (trimmed === "true") return true;\n  if (trimmed === "false") return false;\n  if (/^[-+]?[0-9]+$/.test(trimmed)) return Number.parseInt(trimmed, 10);\n  if (/^[-+]?[0-9]*\\.[0-9]+$/.test(trimmed)) return Number.parseFloat(trimmed);\n  if (/^[\[\{].*[\]\}]$/.test(trimmed) || (/^\".*\"$/.test(trimmed) || /^\'.*\'$/.test(trimmed))) {\n    try {\n      return JSON.parse(trimmed);\n    } catch (e) {\n      return trimmed.replace(/^['\"]|['\"]$/g, "");\n    }\n  }\n  return trimmed;\n};\nconst args = lines.map(parseValue);\nconst result = fn(...args);\nif (result !== undefined) {\n  if (typeof result === "object") {\n    console.log(JSON.stringify(result));\n  } else {\n    console.log(result);\n  }\n}`;
+const getJavaScriptRunner = (exportName: string) => `const fs = require("fs");\nconst path = require("path");\nconst exported = require("./index.js");\nconst fn = typeof exported === "function" ? exported : exported && typeof exported === "object" ? exported["${exportName}"] || exported[Object.keys(exported)[0]] : null;\nif (typeof fn !== "function") {\n  throw new Error("Could not resolve exported function for execution");\n}\nconst rawInput = fs.readFileSync(path.join(__dirname, "input.txt"), "utf8");\nconst lines = rawInput.replace(/\\r\\n/g, "\\n").split("\\n").filter((line) => line.length > 0);\nconst parseValue = (value) => {\n  const trimmed = value.trim();\n  if (trimmed === "true") return true;\n  if (trimmed === "false") return false;\n  if (/^[-+]?[0-9]+$/.test(trimmed)) return Number.parseInt(trimmed, 10);\n  if (/^[-+]?[0-9]*\\.[0-9]+$/.test(trimmed)) return Number.parseFloat(trimmed);\n  if (/^[\\\[\\{][\\s\\S]*[\\\]\\}]$/.test(trimmed) || (/^\\\".*\\\"$/.test(trimmed) || /^\\\'.*\\\'$/.test(trimmed))) {\n    try {\n      return new Function("return " + trimmed)();\n    } catch (e) {\n      try {\n        return JSON.parse(trimmed);\n      } catch (e2) {\n        return trimmed.replace(/^['\"]|['\"]$/g, "");\n      }\n    }\n  }\n  return trimmed;\n};\nconst args = lines.map(parseValue);\n(async () => {\n  try {\n    if ("${exportName}" === "TimeLimitedCache") {\n      const cache = new fn();\n      const outputs = [];\n      const rawActions = rawInput.trim();\n      const regex = /(set|get|wait|count)\\(([^)]*)\\)/g;\n      let match;\n      while ((match = regex.exec(rawActions)) !== null) {\n        const method = match[1];\n        const rawArgs = match[2];\n        const argsList = rawArgs ? rawArgs.split(",").map(s => {\n          const trimmed = s.trim();\n          if (trimmed.startsWith("'") && trimmed.endsWith("'")) return trimmed.slice(1, -1);\n          if (trimmed.startsWith('"') && trimmed.endsWith('"')) return trimmed.slice(1, -1);\n          if (trimmed === "true") return true;\n          if (trimmed === "false") return false;\n          return Number(trimmed);\n        }) : [];\n        if (method === "set") {\n          cache.set(...argsList);\n        } else if (method === "get") {\n          const res = cache.get(...argsList);\n          const val = (res === -1 || res === undefined) ? "undefined" : res;\n          outputs.push(val);\n        } else if (method === "count") {\n          const res = cache.count();\n          outputs.push(res);\n        } else if (method === "wait") {\n          const ms = argsList[0] || 0;\n          await new Promise(resolve => setTimeout(resolve, ms));\n        }\n      }\n      console.log(outputs.join(","));\n      return;\n    }\n    if ("${exportName}" === "timeLimit") {\n      const limitFn = fn(async (x) => {\n        await new Promise(res => setTimeout(res, x));\n        return "Result";\n      }, 100);\n      const res1 = await limitFn(50).catch(err => err instanceof Error ? err.message : String(err));\n      const res2 = await limitFn(150).catch(err => err instanceof Error ? err.message : String(err));\n      if (res1 === "Result" && (res2 === "Time Limit Exceeded" || res2.includes("Time Limit"))) {\n        console.log("Result or timeout");\n      } else {\n        console.log("Failed Promise Time Limit: " + res1 + " | " + res2);\n      }\n      return;\n    }\n    if ("${exportName}" === "debounce") {\n      let count = 0;\n      const debounced = fn(() => { count++; }, 100);\n      debounced();\n      debounced();\n      debounced();\n      await new Promise(res => setTimeout(res, 50));\n      const countAfter50 = count;\n      await new Promise(res => setTimeout(res, 100));\n      const countAfter150 = count;\n      if (countAfter50 === 0 && countAfter150 === 1) {\n        console.log("Delayed execution");\n      } else {\n        console.log("Failed Debounce: " + countAfter50 + " | " + countAfter150);\n      }\n      return;\n    }\n    if ("${exportName}" === "promiseAll") {\n      const fn1 = () => new Promise(resolve => setTimeout(() => resolve(5), 10));\n      const fn2 = () => new Promise(resolve => setTimeout(() => resolve(10), 20));\n      const result = await fn([fn1, fn2]);\n      if (result && result[0] === 5 && result[1] === 10) {\n        console.log("Both resolved");\n      } else {\n        console.log("Failed promiseAll: " + JSON.stringify(result));\n      }\n      return;\n    }\n    const result = await fn(...args);\n    if (result !== undefined) {\n      if (result !== null && typeof result === "object" && typeof result.then === "function") {\n        const resolved = await result;\n        if (resolved !== undefined) {\n          console.log(typeof resolved === "object" ? JSON.stringify(resolved) : resolved);\n        }\n      } else if (typeof result === "object") {\n        console.log(JSON.stringify(result));\n      } else {\n        console.log(result);\n      }\n    }\n  } catch (err) {\n    console.error("Execution Error:", err instanceof Error ? err.message : String(err));\n    process.exit(1);\n  }\n})();`;
 
 // checking wrappercode contains // test wrapper comment
 const isDefaultJavaWrapper = (wrapperCode: string) => wrapperCode.includes("// Test wrapper");
@@ -91,9 +91,14 @@ const getJavaMainWrapper = () => `public class Main {
         .findFirst()
         .orElseThrow(() -> new RuntimeException("No public solution method found"));
     Object instance = java.lang.reflect.Modifier.isStatic(target.getModifiers()) ? null : Solution.class.getDeclaredConstructor().newInstance();
+
     Object[] parsedArgs = parseArguments(target.getGenericParameterTypes(), lines);
     Object result = target.invoke(instance, parsedArgs);
-    if (result != null) {
+    if (target.getReturnType() == void.class) {
+      if (parsedArgs.length > 0) {
+        System.out.println(format(parsedArgs[0]));
+      }
+    } else if (result != null) {
       System.out.println(format(result));
     }
   }
@@ -134,7 +139,8 @@ const getJavaMainWrapper = () => `public class Main {
         return Boolean.parseBoolean(trimmed);
       }
       if (clazz == char.class || clazz == Character.class) {
-        return trimmed.length() > 0 ? trimmed.charAt(0) : '\\0';
+        String cleanChar = trimmed.replaceAll("^['\\\"']|['\\\"']$", "");
+        return cleanChar.length() > 0 ? cleanChar.charAt(0) : '\\0';
       }
       if (clazz.isArray()) {
         return parseArray(trimmed, clazz.getComponentType());
@@ -147,6 +153,9 @@ const getJavaMainWrapper = () => `public class Main {
       }
       if (clazz.getSimpleName().equals("TreeNode")) {
         return parseTreeNode(trimmed);
+      }
+      if (clazz.getSimpleName().equals("Node")) {
+        return parseNode(trimmed);
       }
       return null;
     }
@@ -237,6 +246,9 @@ const getJavaMainWrapper = () => `public class Main {
     }
     if (clazz.getSimpleName().equals("TreeNode")) {
       return formatTreeNode(value);
+    }
+    if (clazz.getSimpleName().equals("Node")) {
+      return formatNode(value);
     }
     if (clazz.isArray()) {
       return arrayToString(value);
@@ -345,6 +357,90 @@ const getJavaMainWrapper = () => `public class Main {
     }
   }
 
+  private static Object parseNode(String raw) {
+    String trimmed = raw.trim();
+    if (trimmed.equals("[]") || trimmed.equals("null")) {
+      return null;
+    }
+    try {
+      Class<?> nodeClass = Class.forName("Node");
+      boolean isGraph = false;
+      try {
+        nodeClass.getField("neighbors");
+        isGraph = true;
+      } catch (Exception e) {
+        isGraph = false;
+      }
+
+      if (isGraph) {
+        String inner = trimmed.substring(1, trimmed.length() - 1);
+        java.util.List<String> items = splitTopLevel(inner);
+        if (items.isEmpty()) return null;
+        
+        java.lang.reflect.Constructor<?> constructor = nodeClass.getConstructor(int.class);
+        java.lang.reflect.Field neighborsField = nodeClass.getField("neighbors");
+        
+        int n = items.size();
+        Object[] nodes = new Object[n];
+        for (int i = 0; i < n; i++) {
+          nodes[i] = constructor.newInstance(i + 1);
+        }
+        
+        for (int i = 0; i < n; i++) {
+          String neighborListRaw = items.get(i).trim();
+          if (neighborListRaw.equals("[]") || neighborListRaw.isEmpty()) continue;
+          String subInner = neighborListRaw.substring(1, neighborListRaw.length() - 1);
+          java.util.List<String> neighborIds = splitTopLevel(subInner);
+          java.util.List<Object> neighbors = (java.util.List<Object>) neighborsField.get(nodes[i]);
+          for (String idStr : neighborIds) {
+            int id = Integer.parseInt(idStr.trim());
+            neighbors.add(nodes[id - 1]);
+          }
+        }
+        return nodes[0];
+      } else {
+        String inner = trimmed.substring(1, trimmed.length() - 1);
+        java.util.List<String> items = splitTopLevel(inner);
+        if (items.isEmpty()) return null;
+        
+        java.lang.reflect.Constructor<?> constructor = nodeClass.getConstructor(int.class);
+        java.lang.reflect.Field nextField = nodeClass.getField("next");
+        java.lang.reflect.Field randomField = nodeClass.getField("random");
+        
+        int n = items.size();
+        Object[] nodes = new Object[n];
+        int[] randomIndices = new int[n];
+        java.util.Arrays.fill(randomIndices, -1);
+        
+        for (int i = 0; i < n; i++) {
+          String pairRaw = items.get(i).trim();
+          String pairInner = pairRaw.substring(1, pairRaw.length() - 1);
+          java.util.List<String> pair = splitTopLevel(pairInner);
+          int val = Integer.parseInt(pair.get(0).trim());
+          nodes[i] = constructor.newInstance(val);
+          
+          String randStr = pair.get(1).trim();
+          if (!randStr.equals("null") && !randStr.isEmpty()) {
+            randomIndices[i] = Integer.parseInt(randStr);
+          }
+        }
+        
+        for (int i = 0; i < n; i++) {
+          if (i < n - 1) {
+            nextField.set(nodes[i], nodes[i + 1]);
+          }
+          if (randomIndices[i] != -1) {
+            randomField.set(nodes[i], nodes[randomIndices[i]]);
+          }
+        }
+        return nodes[0];
+      }
+    } catch (Exception e) {
+      e.printStackTrace();
+      return null;
+    }
+  }
+
   private static String formatListNode(Object head) {
     if (head == null) {
       return "null";
@@ -401,6 +497,81 @@ const getJavaMainWrapper = () => `public class Main {
       return "[]";
     }
   }
+
+  private static String formatNode(Object root) {
+    if (root == null) {
+      return "null";
+    }
+    try {
+      Class<?> nodeClass = Class.forName("Node");
+      boolean isGraph = false;
+      try {
+        nodeClass.getField("neighbors");
+        isGraph = true;
+      } catch (Exception e) {
+        isGraph = false;
+      }
+
+      if (isGraph) {
+        java.lang.reflect.Field neighborsField = nodeClass.getField("neighbors");
+        java.util.Map<Object, Integer> nodeMap = new java.util.HashMap<>();
+        java.util.List<Object> queue = new java.util.ArrayList<>();
+        
+        queue.add(root);
+        nodeMap.put(root, 1);
+        int index = 0;
+        while (index < queue.size()) {
+          Object curr = queue.get(index);
+          java.util.List<?> neighbors = (java.util.List<?>) neighborsField.get(curr);
+          for (Object neighbor : neighbors) {
+            if (!nodeMap.containsKey(neighbor)) {
+              nodeMap.put(neighbor, nodeMap.size() + 1);
+              queue.add(neighbor);
+            }
+          }
+          index++;
+        }
+        
+        java.util.List<String> listRepresentation = new java.util.ArrayList<>();
+        for (int i = 0; i < queue.size(); i++) {
+          Object curr = queue.get(i);
+          java.util.List<?> neighbors = (java.util.List<?>) neighborsField.get(curr);
+          java.util.List<String> neighborIds = new java.util.ArrayList<>();
+          for (Object neighbor : neighbors) {
+            neighborIds.add(String.valueOf(nodeMap.get(neighbor)));
+          }
+          listRepresentation.add("[" + String.join(",", neighborIds) + "]");
+        }
+        return "[" + String.join(",", listRepresentation) + "]";
+      } else {
+        java.lang.reflect.Field valField = nodeClass.getField("val");
+        java.lang.reflect.Field nextField = nodeClass.getField("next");
+        java.lang.reflect.Field randomField = nodeClass.getField("random");
+        
+        java.util.Map<Object, Integer> nodeMap = new java.util.HashMap<>();
+        java.util.List<Object> list = new java.util.ArrayList<>();
+        
+        Object curr = root;
+        int idx = 0;
+        while (curr != null) {
+          list.add(curr);
+          nodeMap.put(curr, idx++);
+          curr = nextField.get(curr);
+        }
+        
+        java.util.List<String> listRepresentation = new java.util.ArrayList<>();
+        for (Object node : list) {
+          int val = (Integer) valField.get(node);
+          Object randNode = randomField.get(node);
+          String randIdx = randNode == null ? "null" : String.valueOf(nodeMap.get(randNode));
+          listRepresentation.add("[" + val + "," + randIdx + "]");
+        }
+        return "[" + String.join(",", listRepresentation) + "]";
+      }
+    } catch (Exception e) {
+      return "null";
+    }
+  }
 }`;
 
 const prepareSourceFile = async ({
@@ -415,24 +586,78 @@ const prepareSourceFile = async ({
   wrapperCode: string;
 }) => {
   if (language.toLowerCase() === "java") {
-    const autoImports = getJavaImports(); // importing dependencies ex- import java.utils.io, etc
-    const useCustomMain = !isDefaultJavaWrapper(wrapperCode) && hasJavaMain(wrapperCode); // defaultjavawrapper - contains // testwrapper code
+    const autoImports = getJavaImports();
+    const useCustomMain = !isDefaultJavaWrapper(wrapperCode) && hasJavaMain(wrapperCode);
     let processedCode: string;
     const cleanCode = code.replace(/public\s+class\b/g, "class");
+    const codeWithoutComment = cleanCode
+      .replace(/\/\/.*$/gm, "")
+      .replace(/\/\*[\s\S]*?\*\//g, "");
+
+    // Dynamic Helper Classes Injection
+    let helperClasses = "";
+    if (cleanCode.includes("ListNode") && !/class\s+ListNode\b/.test(codeWithoutComment)) {
+      helperClasses += `
+class ListNode {
+    public int val;
+    public ListNode next;
+    public ListNode() {}
+    public ListNode(int val) { this.val = val; }
+    public ListNode(int val, ListNode next) { this.val = val; this.next = next; }
+}
+`;
+    }
+    if (cleanCode.includes("TreeNode") && !/class\s+TreeNode\b/.test(codeWithoutComment)) {
+      helperClasses += `
+class TreeNode {
+    public int val;
+    public TreeNode left;
+    public TreeNode right;
+    public TreeNode() {}
+    public TreeNode(int val) { this.val = val; }
+    public TreeNode(int val, TreeNode left, TreeNode right) {
+        this.val = val;
+        this.left = left;
+        this.right = right;
+    }
+}
+`;
+    }
+    if (cleanCode.includes("Node") && !/class\s+Node\b/.test(codeWithoutComment)) {
+      if (cleanCode.includes("neighbors") || cleanCode.includes("List<Node>")) {
+        helperClasses += `
+class Node {
+    public int val;
+    public java.util.List<Node> neighbors;
+    public Node() { val = 0; neighbors = new java.util.ArrayList<Node>(); }
+    public Node(int _val) { val = _val; neighbors = new java.util.ArrayList<Node>(); }
+    public Node(int _val, java.util.ArrayList<Node> _neighbors) { val = _val; neighbors = _neighbors; }
+}
+`;
+      } else if (cleanCode.includes("random")) {
+        helperClasses += `
+class Node {
+    public int val;
+    public Node next;
+    public Node random;
+    public Node(int val) { this.val = val; this.next = null; this.random = null; }
+}
+`;
+      }
+    }
 
     if (useCustomMain) {
-      processedCode = `${autoImports}\n\n${cleanCode}\n${wrapperCode}`;
+      processedCode = `${autoImports}\n\n${cleanCode}\n${wrapperCode}\n${helperClasses}`;
     } else if (hasJavaMain(cleanCode)) {
-      // Find the class that contains the main method and rename it to Main so the javac / java command runs perfectly
       const mainClassMatch = cleanCode.match(/class\s+([A-Za-z0-9_]+)(?:(?!class)[\s\S])*?void\s+main\s*\(/);
       const mainClassName = mainClassMatch ? mainClassMatch[1] : null;
-      processedCode = `${autoImports}\n\n${mainClassName ? cleanCode.replace(new RegExp(`class\\s+${mainClassName}\\b`), "class Main") : cleanCode}`;
+      processedCode = `${autoImports}\n\n${mainClassName ? cleanCode.replace(new RegExp(`class\\s+${mainClassName}\\b`), "class Main") : cleanCode}\n${helperClasses}`;
     } else {
       const hasSolutionClass = /class\s+Solution\b/.test(cleanCode);
-      const solutionClassReadyCode = hasSolutionClass 
-        ? cleanCode 
+      const solutionClassReadyCode = hasSolutionClass
+        ? cleanCode
         : cleanCode.replace(/class\s+[A-Za-z0-9_]+/, "class Solution");
-      processedCode = `${autoImports}\n\n${solutionClassReadyCode}\n\n${getJavaMainWrapper()}`;
+      processedCode = `${autoImports}\n\n${solutionClassReadyCode}\n\n${getJavaMainWrapper()}\n${helperClasses}`;
     }
 
     await fs.writeFile(path.join(tempDir, "Main.java"), processedCode);
@@ -444,10 +669,30 @@ const prepareSourceFile = async ({
   }
 
   const fileName = "index.js";
-  const processedCode = wrapperCode ? `${code}\n${wrapperCode}` : code;
+  let exportName = extractJsExportName(wrapperCode);
+
+  // Dynamic JS Function detection fallback if wrapper is missing
+  if (!exportName) {
+    const codeWithoutComment = code
+      .replace(/\/\/.*$/gm, "")
+      .replace(/\/\*[\s\S]*?\*\//g, "");
+
+    const matchFunction = /function\s+([A-Za-z_$][\w$]*)\s*\(/.exec(codeWithoutComment);
+    if (matchFunction) {
+      exportName = matchFunction[1];
+    } else {
+      const matchVar = /(?:var|let|const)\s+([A-Za-z_$][\w$]*)\s*=\s*/.exec(codeWithoutComment);
+      if (matchVar) exportName = matchVar[1];
+    }
+  }
+
+  const finalWrapper = exportName && !wrapperCode.includes("module.exports")
+    ? `\nmodule.exports = { ${exportName} };`
+    : wrapperCode;
+
+  const processedCode = finalWrapper ? `${code}\n${finalWrapper}` : code;
   await fs.writeFile(path.join(tempDir, fileName), processedCode);
 
-  const exportName = extractJsExportName(wrapperCode);
   if (exportName) {
     const runnerFile = "runner.js";
     await fs.writeFile(path.join(tempDir, runnerFile), getJavaScriptRunner(exportName));
@@ -462,6 +707,7 @@ const prepareSourceFile = async ({
     runCommand: `node ${fileName} < input.txt`,
   };
 };
+
 
 const buildDockerCommand = ({
   dockerImage,
@@ -484,9 +730,32 @@ const buildDockerCommand = ({
                 sh -c "timeout 20s ${runCommand}"`;
 };
 
+const getLevenshteinDistance = (a: string, b: string): number => {
+  const matrix: number[][] = [];
+
+  for (let i = 0; i <= a.length; i++) {
+    matrix[i] = [i];
+  }
+
+  for (let j = 0; j <= b.length; j++) {
+    matrix[0][j] = j;
+  }
+
+  for (let i = 1; i <= a.length; i++) {
+    for (let j = 1; j <= b.length; j++) {
+      matrix[i][j] = Math.min(
+        matrix[i - 1][j] + 1,
+        matrix[i][j - 1] + 1,
+        matrix[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)
+      )
+    }
+  }
+  return matrix[a.length][b.length]
+}
+
 export const executeCode = async (req: Request, res: Response) => {
   const { code, language, oid, mode, customInput } = req.body as ExecuteBody;
-  
+
   const sourceCode = typeof code === "string" ? code : "";
   const githubOid = typeof oid === "string" ? oid : "";
   const executionMode = getExecutionMode(mode);
@@ -495,6 +764,10 @@ export const executeCode = async (req: Request, res: Response) => {
   const useCustomInput = customInputValue.length > 0; // in case of custom input data
   const jobId = uuidv4();
   const tempDir = path.join(process.cwd(), "temp", jobId);
+
+  let testCases: TestCaseRecord[] = [];
+  let codeSnippets: CodeSnippetRecord[] = [];
+  let wrapperCode = "";
 
   try {
     await fs.mkdir(tempDir, { recursive: true });
@@ -529,20 +802,57 @@ export const executeCode = async (req: Request, res: Response) => {
             },
           });
 
-          // Sync database OID for future fast lookups
-          if (fileData) {
-            await prisma.problem.update({
-              where: { id: fileData.id },
-              data: { github_oid: githubOid },
-            }).catch((err) => console.error("Failed to sync fallback OID in codeExecution:", err));
+          let bestMatch: any = null;
+          let bestSimilarity = 0;
+
+          if (!fileData) {
+            const allProblems = await prisma.problem.findMany({
+              select: {
+                id: true,
+                name: true,
+                test_cases: true,
+                code_snippets: true,
+              }
+            });
+
+            const target = baseName.toLowerCase();
+
+            for (const p of allProblems) {
+              const dbName = p.name.toLowerCase();
+
+              if (dbName.includes(target) || target.includes(dbName)) {
+                bestMatch = p;
+                break;
+              }
+
+              const distance = getLevenshteinDistance(target, dbName);
+              const similarity = 1 - distance / Math.max(target.length, dbName.length);
+
+              if (similarity > bestSimilarity && similarity >= 0.4) {
+                bestSimilarity = similarity;
+                bestMatch = p;
+              }
+            }
+
+            if (bestMatch) {
+              fileData = bestMatch;
+            }
           }
         }
       }
     }
 
-    const testCases = (fileData?.test_cases ?? []) as TestCaseRecord[];
-    const codeSnippets = (fileData?.code_snippets ?? []) as CodeSnippetRecord[];
-    const wrapperCode = codeSnippets.find((snippet) => snippet.language === executionLanguage)?.wrapperCode ?? "";
+    testCases = (fileData?.test_cases ?? []) as TestCaseRecord[];
+    codeSnippets = (fileData?.code_snippets ?? []) as CodeSnippetRecord[];
+    wrapperCode = codeSnippets.find((snippet) => snippet.language === executionLanguage)?.wrapperCode ?? "";
+     if (testCases.length === 0 && !useCustomInput) {
+      return res.status(400).json({
+        error: "Execution Aborted: Missing Test Cases",
+        details: "This problem file is a custom repository addition and does not have pre-seeded database test cases.\n\nPlease toggle the 'Custom Input' checkbox and specify your test case input (e.g. tree format like [3,1,4,3,null,1,5]) in the custom input text box to execute your solution!",
+        error_status: "VALIDATION_ERROR",
+        execution_status: "ERROR"
+      });
+    }
     const casesToRun = useCustomInput
       ? [{ input: customInputValue, expectedOutput: "" }]
       : testCases.length === 0
@@ -570,7 +880,19 @@ export const executeCode = async (req: Request, res: Response) => {
       try {
         const { stdout, stderr } = await execAsync(dockerCmd);
 
-        if (normalize(stderr)) {
+        let cleanStderr = normalize(stderr);
+        if (executionLanguage === "java") {
+          cleanStderr = cleanStderr
+            .split("\n")
+            .filter((line) => {
+              const trimmed = line.trim().toLowerCase();
+              return !trimmed.startsWith("note:") && !trimmed.includes("recompile with -xlint");
+            })
+            .join("\n")
+            .trim();
+        }
+
+        if (cleanStderr) {
           results.push({
             testCaseIndex: index,
             output: stdout,
@@ -580,6 +902,7 @@ export const executeCode = async (req: Request, res: Response) => {
           });
           break;
         }
+
 
         const actualOutput = normalize(stdout);
         const expectedOutput = normalize(currentCase.expectedOutput);
@@ -622,7 +945,7 @@ export const executeCode = async (req: Request, res: Response) => {
       problemId: useCustomInput ? "" : testCases[0]?.problemId || "",
       details: results,
       error: results.find((r) => r.runtimeError)?.runtimeError || null,
-      execution_status:totalPassed === casesToRun.length ? "SUCCESS" : 'ERROR',
+      execution_status: totalPassed === casesToRun.length ? "SUCCESS" : 'ERROR',
     });
   } catch (error) {
     if (executionLanguage === "javascript") {
@@ -640,7 +963,7 @@ export const executeCode = async (req: Request, res: Response) => {
 
         for (const [index, currentCase] of testCasesToRun.entries()) {
           const logs: string[] = [];
-          
+
           const sandbox = {
             console: {
               log: (...args: any[]) => {
@@ -669,54 +992,152 @@ export const executeCode = async (req: Request, res: Response) => {
             Promise,
           };
 
+          let exportName = extractJsExportName(wrapperCode);
+          if (!exportName) {
+            const codeWithoutComment = sourceCode
+              .replace(/\/\/.*$/gm, "")
+              .replace(/\/\*[\s\S]*?\*\//g, "");
+
+            const matchFunction = /function\s+([A-Za-z_$][\w$]*)\s*\(/.exec(codeWithoutComment);
+            if (matchFunction) {
+              exportName = matchFunction[1];
+            } else {
+              const matchVar = /(?:var|let|const)\s+([A-Za-z_$][\w$]*)\s*=\s*/.exec(codeWithoutComment);
+              if (matchVar) exportName = matchVar[1];
+            }
+          }
+
+          const dynamicExport = exportName && !wrapperCode.includes("module.exports")
+            ? `\nmodule.exports = { ${exportName} };`
+            : wrapperCode;
+          const combinedSource = dynamicExport ? `${sourceCode}\n${dynamicExport}` : sourceCode;
+
           const context = vm.createContext(sandbox);
-          const combinedSource = wrapperCode ? `${sourceCode}\n${wrapperCode}` : sourceCode;
           const userScript = new vm.Script(combinedSource, { filename: "solution.js" });
           userScript.runInContext(context);
-
-          const exportName = extractJsExportName(wrapperCode);
           let stdoutValue = "";
           let runtimeErrorVal: string | null = null;
 
           try {
             if (exportName) {
               const exported = sandbox.module.exports as any;
-              const fn = typeof exported === "function" 
-                ? exported 
-                : exported && typeof exported === "object" 
-                  ? exported[exportName] || exported[Object.keys(exported)[0]] 
+              const firstKey = exported && typeof exported === "object" ? Object.keys(exported)[0] : undefined;
+              const fn = typeof exported === "function"
+                ? exported
+                : exported && typeof exported === "object"
+                  ? (exportName ? exported[exportName] : null) || (firstKey ? exported[firstKey] : null)
                   : null;
 
               if (typeof fn !== "function") {
                 throw new Error("Could not resolve exported function for execution");
               }
 
-              const lines = (currentCase.input || "").replace(/\r\n/g, "\n").split("\n").filter((line) => line.length > 0);
+              const lines = (currentCase.input || "").replace(/\r\n/g, "\n").split("\n").filter((line: string) => line.length > 0);
               const parseValue = (value: string) => {
                 const trimmed = value.trim();
                 if (trimmed === "true") return true;
                 if (trimmed === "false") return false;
                 if (/^[-+]?[0-9]+$/.test(trimmed)) return Number.parseInt(trimmed, 10);
                 if (/^[-+]?[0-9]*\.[0-9]+$/.test(trimmed)) return Number.parseFloat(trimmed);
-                if (/^[\[\{].*[\]\}]$/.test(trimmed) || (/^\".*\"$/.test(trimmed) || /^\'.*\'$/.test(trimmed))) {
+                if (/^[\[\{][\s\S]*[\]\}]$/.test(trimmed) || (/^\".*\"$/.test(trimmed) || /^\'.*\'$/.test(trimmed))) {
                   try {
-                    return JSON.parse(trimmed);
+                    return new Function("return " + trimmed)();
                   } catch (e) {
-                    return trimmed.replace(/^['"]|['"]$/g, "");
+                    try {
+                      return JSON.parse(trimmed);
+                    } catch (e2) {
+                      return trimmed.replace(/^['"]|['"]$/g, "");
+                    }
                   }
                 }
                 return trimmed;
               };
 
               const args = lines.map(parseValue);
-              const result = fn(...args);
-              if (result !== undefined) {
-                if (typeof result === "object") {
-                  stdoutValue = JSON.stringify(result);
+              let result: any;
+              if (exportName === "TimeLimitedCache") {
+                const cache = new fn();
+                const outputs: any[] = [];
+                const rawActions = (currentCase.input || "").trim();
+                const regex = /(set|get|wait|count)\(([^)]*)\)/g;
+                let match;
+                while ((match = regex.exec(rawActions)) !== null) {
+                  const method = match[1];
+                  const rawArgs = match[2];
+                  const argsList = rawArgs ? rawArgs.split(",").map(s => {
+                    const trimmed = s.trim();
+                    if (trimmed.startsWith("'") && trimmed.endsWith("'")) return trimmed.slice(1, -1);
+                    if (trimmed.startsWith('"') && trimmed.endsWith('"')) return trimmed.slice(1, -1);
+                    if (trimmed === "true") return true;
+                    if (trimmed === "false") return false;
+                    return Number(trimmed);
+                  }) : [];
+                  if (method === "set") {
+                    cache.set(...argsList);
+                  } else if (method === "get") {
+                    const res = cache.get(...argsList);
+                    const val = (res === -1 || res === undefined) ? "undefined" : res;
+                    outputs.push(val);
+                  } else if (method === "count") {
+                    const res = cache.count();
+                    outputs.push(res);
+                  } else if (method === "wait") {
+                    const ms = argsList[0] || 0;
+                    await new Promise(resolve => setTimeout(resolve, ms));
+                  }
+                }
+                result = outputs.join(",");
+              } else if (exportName === "timeLimit") {
+                const limitFn = fn(async (x: number) => {
+                  await new Promise(res => setTimeout(res, x));
+                  return "Result";
+                }, 100);
+                const res1 = await limitFn(50).catch((err: any) => err instanceof Error ? err.message : String(err));
+                const res2 = await limitFn(150).catch((err: any) => err instanceof Error ? err.message : String(err));
+                if (res1 === "Result" && (res2 === "Time Limit Exceeded" || res2.includes("Time Limit"))) {
+                  result = "Result or timeout";
                 } else {
-                  stdoutValue = String(result);
+                  result = "Failed Promise Time Limit: " + res1 + " | " + res2;
+                }
+              } else if (exportName === "debounce") {
+                let count = 0;
+                const debounced = fn(() => { count++; }, 100);
+                debounced();
+                debounced();
+                debounced();
+                await new Promise(res => setTimeout(res, 50));
+                const countAfter50 = count;
+                await new Promise(res => setTimeout(res, 100));
+                const countAfter150 = count;
+                if (countAfter50 === 0 && countAfter150 === 1) {
+                  result = "Delayed execution";
+                } else {
+                  result = "Failed Debounce: " + countAfter50 + " | " + countAfter150;
+                }
+              } else if (exportName === "promiseAll") {
+                const fn1 = () => new Promise(resolve => setTimeout(() => resolve(5), 10));
+                const fn2 = () => new Promise(resolve => setTimeout(() => resolve(10), 20));
+                const res = await fn([fn1, fn2]);
+                if (res && res[0] === 5 && res[1] === 10) {
+                  result = "Both resolved";
+                } else {
+                  result = "Failed promiseAll: " + JSON.stringify(res);
+                }
+              } else {
+                const rawResult = fn(...args);
+                if (rawResult !== null && typeof rawResult === "object" && typeof rawResult.then === "function") {
+                  result = await rawResult;
+                } else {
+                  result = rawResult;
                 }
               }
+
+              let resultStr = "";
+              if (result !== undefined) {
+                resultStr = typeof result === "object" ? JSON.stringify(result) : String(result);
+              }
+              // Merge both console logs AND function return value
+              stdoutValue = logs.length > 0 ? `${logs.join("\n")}\n${resultStr}`.trim() : resultStr;
             } else {
               stdoutValue = logs.join("\n");
             }
@@ -755,7 +1176,7 @@ export const executeCode = async (req: Request, res: Response) => {
           problemId: useCustomInput ? "" : testCases[0]?.problemId || "",
           details: localResults,
           error: localResults.find((r) => r.runtimeError)?.runtimeError || null,
-          execution_status:localPassedCount === testCasesToRun.length ? "SUCCESS" : 'ERROR',
+          execution_status: localPassedCount === testCasesToRun.length ? "SUCCESS" : 'ERROR',
         });
       } catch (sandboxErr) {
         const message = sandboxErr instanceof Error ? sandboxErr.message : "Sandbox crash";
@@ -765,11 +1186,22 @@ export const executeCode = async (req: Request, res: Response) => {
       }
     }
 
-    const message = error instanceof Error ? error.message : "Unknown execution failure";
+    let message = error instanceof Error ? error.message : "Unknown execution failure";
     const error_status = error instanceof Error ? error.message.includes('time limit exceed') ? 'TIMEOUT' : 'RUNTIME_ERROR' : 'ERROR'
 
+
+    if (
+      message.toLowerCase().includes("docker: command not found") ||
+      message.toLowerCase().includes("cannot connect to the docker daemon") ||
+      message.toLowerCase().includes("docker daemon is not running") ||
+      message.toLowerCase().includes("is the docker daemon running") ||
+      message.toLowerCase().includes("error during connect")
+    ) {
+      message = "DOCKER_DAEMON_OFFLINE: The Docker service is missing or not active on the host machine. Please start Docker Desktop to compile and execute Java solutions.";
+    }
+
     console.error("System Core Fault:", error);
-    return res.status(500).json({ error: "System execution failure", details: message ,error_status});
+    return res.status(500).json({ error: "System execution failure", details: message, error_status });
 
 
 

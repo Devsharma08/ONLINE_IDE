@@ -15,6 +15,7 @@ export type FileContentResponse = {
   problem_definition?: string;
   problem_hints?: unknown;
   difficulty_level?: string;
+  data_structure?: string;
 };
 
 export type ProblemTestCase = {

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useContext, useRef } from "react";
+import { useSearchParams } from "react-router-dom";
 import { FileNamesContext, type FileEntry } from "../context/fileNamesContext";
 import { CodeContext } from "../context/codeContext";
 import { UserResponseContext } from "../context/responseContent";
@@ -37,6 +38,8 @@ const readLocalFile = (oid: string) => {
 };
 
 const Terminal = () => {
+   const [searchParams] = useSearchParams();
+   const queryFile = searchParams.get("file");
    const [code, setCode] = useState<string>("");
    const [language, setLanguage] = useState<SupportedLanguage>("");
    const [loading, setLoading] = useState<boolean>(false);
@@ -389,6 +392,17 @@ const Terminal = () => {
          cancelled = true;
       };
    }, [loadLocalFiles, setFilesData, setStatus]);
+
+   useEffect(() => {
+      if (!filesLoading && filesData.length > 0 && queryFile) {
+         const matched = filesData.find(
+            (file) => file.name.toLowerCase() === queryFile.toLowerCase() || file.oid === queryFile
+         );
+         if (matched && activeFile !== matched.oid) {
+            void handleFileClick(matched.oid, matched.name);
+         }
+      }
+   }, [filesLoading, filesData, queryFile, activeFile, handleFileClick]);
 
    console.log("filesData", filesData);
 

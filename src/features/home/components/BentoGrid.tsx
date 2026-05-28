@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { bentoItems } from "../content";
 
 const BentoGrid = () => {
@@ -8,11 +9,12 @@ const BentoGrid = () => {
         <p className="text-base text-textdimwhite sm:text-lg">Dive deep into categorized concepts directly from the repository.</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 md:grid-rows-3 gap-4 md:gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-4 md:grid-rows-4 gap-4 md:gap-6 px-4 md:px-0">
         {bentoItems.map((item) => (
-          <div
+          <Link
             key={item.title}
-            className={`group relative overflow-hidden rounded-3xl cursor-default border border-white/10 shadow-lg ${item.className}`}
+            to={`/ds/${item.slug}`}
+            className={`group relative overflow-hidden rounded-3xl cursor-pointer border border-white/10 shadow-lg hover:border-cyan-500/30 transition-all duration-300 block ${item.className}`}
           >
             <img
               src={item.img}
@@ -29,7 +31,7 @@ const BentoGrid = () => {
                 {item.desc}
               </p>
             </div>
-          </div>
+          </Link>
         ))}
       </div>
     </div>

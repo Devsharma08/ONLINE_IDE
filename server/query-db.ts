@@ -1,28 +1,30 @@
-import { prisma } from "./src/Lib/prisma.js";
-import dotenv from "dotenv";
-import path from "path";
+import { PrismaClient } from "@prisma/client";
 
-dotenv.config({ path: path.resolve(process.cwd(), ".env.development") });
+const prisma = new PrismaClient();
 
 async function main() {
-  try {
-    const problems = await prisma.problem.findMany({
-      include: {
-        test_cases: true,
-        code_snippets: true,
-      }
-    });
-    console.log(`Found ${problems.length} problems in the database:`);
-    for (const p of problems) {
-      console.log(`[#${p.problem_number}] ${p.name} - github_oid: ${p.github_oid}`);
-      console.log(`  Test cases: ${p.test_cases.length}`);
-      console.log(`  Snippets: ${p.code_snippets.map(s => s.language).join(", ")}`);
-    }
-  } catch (error) {
-    console.error("Failed to query DB:", error);
-  } finally {
-    await prisma.$disconnect();
-  }
+  const problems = await prisma.problem.findMany({
+    where: {
+      name: {
+        contains: "time",
+        mode: "insensitive",
+      },
+    },
+    select: {
+      id: true,
+      name: true,
+      code_snippets: true,
+      test_cases: true,
+    },
+  });
+
+  console.log(JSON.stringify(problems, null, 2));
 }
 
-main();
+main()
+  .catch((e) => {
+    console.error(e);
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });

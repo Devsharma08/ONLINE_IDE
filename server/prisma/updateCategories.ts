@@ -1,111 +1,10 @@
 import dotenv from "dotenv";
 import path from "path";
-import { pathToFileURL } from "url";
 import { Pool } from "pg";
 import { PrismaPg } from "@prisma/adapter-pg";
-import { Level, PrismaClient } from "../src/generated/prisma/client.js";
-import { rawProblems, type RawSeedProblem } from "./leetcodeProblems.js";
+import { PrismaClient } from "../src/generated/prisma/client.js";
 
 dotenv.config({ path: path.resolve(process.cwd(), ".env.development") });
-
-const MAX_TEST_CASES_PER_PROBLEM = 3;
-const GITHUB_OID_PATTERN = /^[a-f0-9]{40}$/i;
-
-type SeedProblem = Omit<RawSeedProblem, "difficulty_level"> & {
-  difficulty_level: Level;
-};
-
-const getConnectionString = () => {
-  const directUrl = process.env.DIRECT_URL;
-
-  if (!directUrl) {
-    throw new Error("DIRECT_URL is required to seed LeetCode problems.");
-  }
-
-  return directUrl;
-};
-
-const maskConnectionString = (connectionString: string) =>
-  connectionString.replace(/:([^@]+)@/, ":***@");
-
-const toLevel = (difficulty: RawSeedProblem["difficulty_level"]): Level => {
-  const level = Level[difficulty];
-
-  if (!level) {
-    throw new Error(`Unsupported difficulty level: ${difficulty}`);
-  }
-
-  return level;
-};
-
-export const problems: SeedProblem[] = rawProblems.map((problem) => ({
-  ...problem,
-  difficulty_level: toLevel(problem.difficulty_level),
-}));
-
-export const validateSeedData = () => {
-  const problemNames = new Set<string>();
-  const problemNumbers = new Set<number>();
-  const githubOids = new Set<string>();
-
-  for (const problem of problems) {
-    if (!problem.name.toLowerCase().startsWith("leetcode")) {
-      throw new Error(`Seed data must stay LeetCode-only. Invalid problem: ${problem.name}`);
-    }
-
-    if (problemNames.has(problem.name)) {
-      throw new Error(`Duplicate problem name in seed data: ${problem.name}`);
-    }
-    problemNames.add(problem.name);
-
-    if (problemNumbers.has(problem.problem_number)) {
-      throw new Error(`Duplicate problem_number in seed data: ${problem.problem_number}`);
-    }
-
-    if (!Number.isInteger(problem.problem_number) || problem.problem_number <= 0) {
-      throw new Error(`${problem.name} has an invalid problem_number: ${problem.problem_number}`);
-    }
-    problemNumbers.add(problem.problem_number);
-
-    if (githubOids.has(problem.github_oid)) {
-      throw new Error(`Duplicate github_oid in seed data: ${problem.github_oid}`);
-    }
-
-    if (!GITHUB_OID_PATTERN.test(problem.github_oid)) {
-      throw new Error(`${problem.name} has an invalid github_oid: ${problem.github_oid}`);
-    }
-    githubOids.add(problem.github_oid);
-
-    if (problem.test_cases.length === 0) {
-      throw new Error(`${problem.name} must include at least one test case.`);
-    }
-
-    if (problem.test_cases.length > MAX_TEST_CASES_PER_PROBLEM) {
-      throw new Error(
-        `${problem.name} has ${problem.test_cases.length} test cases. Maximum allowed is ${MAX_TEST_CASES_PER_PROBLEM}.`,
-      );
-    }
-
-    if (problem.code_snippets.length === 0) {
-      throw new Error(`${problem.name} must include at least one code snippet.`);
-    }
-
-    for (const snippet of problem.code_snippets) {
-      if (snippet.language !== "java" && snippet.language !== "javascript") {
-        throw new Error(`${problem.name} has unsupported snippet language: ${snippet.language}`);
-      }
-    }
-  }
-};
-
-const createPrisma = () => {
-  const connectionString = getConnectionString();
-  const pool = new Pool({ connectionString });
-  const adapter = new PrismaPg(pool);
-  const prisma = new PrismaClient({ adapter });
-
-  return { connectionString, pool, prisma };
-};
 
 const PROBLEM_CATEGORY_MAP: Record<string, string> = {
   "LeetCode-01E": "array",
@@ -349,76 +248,84 @@ export function inferDataStructure(name: string, definition: string): string {
 }
 
 async function main() {
-  validateSeedData();
+  let directUrl = process.env.DIRECT_URL || process.env.DATABASE_URL;
+  if (!directUrl) {
+    throw new Error("DIRECT_URL or DATABASE_URL environment variable is missing.");
+  }
 
-  const { connectionString, pool, prisma } = createPrisma();
+  // Optimize Supabase Connection:
+  // If connection is using pgbouncer pooler (port 6543), try to construct direct host on port 5432
+  if (directUrl.includes("pooler.supabase.com:6543")) {
+    console.log("Detected pgbouncer pooler URL. Attempting to direct connect on port 5432 to bypass transaction locks...");
+    const directHostUrl = directUrl
+      .replace("pooler.supabase.com:6543", "db.conesevqsbvrjhldeokj.supabase.co:5432")
+      .replace("?pgbouncer=true", "")
+      .replace("&pgbouncer=true", "");
+    
+    try {
+      console.log("Applying Raw SQL ALTER TABLE Migration via Direct Port 5432...");
+      const pool = new Pool({ connectionString: directHostUrl, connectionTimeoutMillis: 5000 });
+      await pool.query('ALTER TABLE "Problem" ADD COLUMN IF NOT EXISTS "data_structure" TEXT;');
+      await pool.end();
+      console.log("✅ Database schema updated! 'data_structure' column verified/added successfully via Direct Port.");
+      directUrl = directHostUrl; // Use the successful direct host connection string
+    } catch (directErr) {
+      console.warn("Direct port 5432 connection timed out or failed. Falling back to default URL on port 6543...");
+      try {
+        const pool = new Pool({ connectionString: directUrl });
+        await pool.query('ALTER TABLE "Problem" ADD COLUMN IF NOT EXISTS "data_structure" TEXT;');
+        await pool.end();
+        console.log("✅ Database schema updated! 'data_structure' column verified/added successfully via fallback URL.");
+      } catch (fallbackErr) {
+        console.error("❌ Schema migration failed on both routes. Please run prisma db push manually over a direct connection.");
+        throw fallbackErr;
+      }
+    }
+  } else {
+    try {
+      console.log("Applying raw SQL Alter Table migration...");
+      const pool = new Pool({ connectionString: directUrl });
+      await pool.query('ALTER TABLE "Problem" ADD COLUMN IF NOT EXISTS "data_structure" TEXT;');
+      await pool.end();
+      console.log("✅ Database schema updated successfully.");
+    } catch (e) {
+      console.error("Raw SQL alter table migration failed:", e);
+    }
+  }
+
+  // Now perform category updates
+  const pool = new Pool({ connectionString: directUrl });
+  const adapter = new PrismaPg(pool);
+  const prisma = new PrismaClient({ adapter });
 
   try {
-    console.log(`Starting LeetCode problem seed for ${problems.length} problems...`);
-    console.log("Connecting to:", maskConnectionString(connectionString));
+    console.log("Prisma Client connected! Fetching problems from database...");
+    const dbProblems = await prisma.problem.findMany({
+      select: { id: true, name: true, problem_definition: true }
+    });
 
-    const problemNumbers = problems.map((problem) => problem.problem_number);
-    const githubOids = problems.map((problem) => problem.github_oid);
+    console.log(`Found ${dbProblems.length} problems. Running category updates...`);
 
-    await prisma.$transaction(
-      async (tx) => {
-        const conflictingProblems = await tx.problem.findMany({
-          where: {
-            OR: [{ problem_number: { in: problemNumbers } }, { github_oid: { in: githubOids } }],
-          },
-          select: { id: true },
-        });
+    let updatedCount = 0;
+    for (const problem of dbProblems) {
+      const category = inferDataStructure(problem.name, problem.problem_definition);
+      
+      await prisma.problem.update({
+        where: { id: problem.id },
+        data: { data_structure: category }
+      });
+      
+      console.log(`- Problem [#${problem.name}] updated to: [ ${category.toUpperCase()} ]`);
+      updatedCount++;
+    }
 
-        if (conflictingProblems.length > 0) {
-          await tx.problem.deleteMany({
-            where: { id: { in: conflictingProblems.map((problem) => problem.id) } },
-          });
-        }
-
-        for (const problemSeed of problems) {
-          const { test_cases, code_snippets, ...problemData } = problemSeed;
-
-          await tx.problem.create({
-            data: {
-              ...problemData,
-              data_structure: inferDataStructure(problemData.name, problemData.problem_definition),
-              test_cases: {
-                create: test_cases,
-              },
-              code_snippets: {
-                create: code_snippets,
-              },
-            },
-          });
-
-          console.log(
-            `Seeded [#${problemSeed.problem_number}] ${problemSeed.name}: ${test_cases.length} tests, ${code_snippets.length} snippets`,
-          );
-        }
-      },
-      { maxWait: 20_000, timeout: 120_000 },
-    );
-
-    console.log("LeetCode problem seed complete.");
+    console.log(`Success! Explicitly mapped & updated ${updatedCount} problem categories inside database.`);
+  } catch (error) {
+    console.error("Migration failed:", error);
   } finally {
     await prisma.$disconnect();
     await pool.end();
   }
 }
 
-const isDirectRun = () => {
-  const entry = process.argv[1];
-
-  if (!entry) {
-    return false;
-  }
-
-  return import.meta.url === pathToFileURL(path.resolve(entry)).href;
-};
-
-if (isDirectRun()) {
-  main().catch((error) => {
-    console.error("Seed failed:", error);
-    process.exit(1);
-  });
-}
+main();

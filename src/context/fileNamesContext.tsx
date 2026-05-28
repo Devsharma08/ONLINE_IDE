@@ -8,6 +8,8 @@ export type FileEntry = {
     path?: string;
     isLocal?: boolean;
     difficulty_level?: string;
+    data_structure?: string;
+    language?: string;
 }
 
 export type FileNamesContextType = {

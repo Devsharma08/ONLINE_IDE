@@ -7,6 +7,24 @@ import { postGraphQL } from "../../Lib/githubClient.js";
 import { prisma } from "../../Lib/prisma.js";
 import type { GitHubFileContentResponse } from "../../types/github.js";
 
+
+const getLevenshteinDistance = (a:string,b:string) => {
+  let matrix:number[][] = [];
+  
+  for(let i = 0 ; i <= a.length ; i++ ) matrix[i] = [i];
+  for(let j = 0 ; j <= b.length ; j++) matrix[0][j] = j;
+  for(let i = 1 ;  i <= a.length ; i++){
+    for(let j =1 ; j <= b.length ; j++){
+      matrix[i][j] = Math.min(
+        matrix[i-1][j] + 1,
+        matrix[i][j-1] + 1,
+        matrix[i-1][j-1] + (a[i-1] === b[j-1] ? 0 : 1)
+      )
+    }
+  }
+  return matrix[a.length][b.length];
+}
+
 export const getFileContent = async (req: Request, res: Response) => {
   const oid = getQueryValue(req.query.oid);
 
@@ -52,11 +70,12 @@ export const getFileContent = async (req: Request, res: Response) => {
         problem_definition: true,
         problem_hints: true,
         difficulty_level: true,
+        data_structure: true,
       },
     });
 
+    // Fallback: search in cached filenames
     if (!testcases) {
-      // Fallback: search in cached filenames
       const cachedFiles = internalCache.get<any[]>(CACHE_KEYS.fileNames);
       const matchedFile = cachedFiles?.find((f) => f.oid === oid);
       if (matchedFile && typeof matchedFile.name === "string") {
@@ -75,19 +94,56 @@ export const getFileContent = async (req: Request, res: Response) => {
               problem_definition: true,
               problem_hints: true,
               difficulty_level: true,
+              data_structure: true,
             },
           });
+        }
 
-          // Sync database OID for future fast lookups
-          if (testcases) {
-            await prisma.problem.update({
-              where: { id: testcases.id },
-              data: { github_oid: oid },
-            }).catch((err) => console.error("Failed to sync fallback OID in getFileContent:", err));
+        // fuzzy match if exact match not found
+               // Declare matching variables in the outer scope so they are compile-safe!
+        let bestMatch: any = null;
+        let bestSimilarity = 0;
+
+        // fuzzy match if exact match not found
+        if (!testcases) {
+          const allProblems = await prisma.problem.findMany({
+            select: {
+              id: true,
+              name: true,
+              test_cases: true,
+              problem_definition: true,
+              problem_hints: true,
+              difficulty_level: true,
+              data_structure: true,
+            }
+          });
+
+          const target = baseName.toLowerCase();
+
+          for (const p of allProblems) {
+            const dbName = p.name.toLowerCase();
+            if (dbName.includes(target) || target.includes(dbName)) {
+              bestMatch = p;
+              break;
+            }
+
+            const distance = getLevenshteinDistance(target, dbName);
+            const similarity = 1 - distance / Math.max(target.length, dbName.length);
+
+            if (similarity > bestSimilarity && similarity >= 0.4) {
+              bestSimilarity = similarity;
+              bestMatch = p;
+            }
+          }
+
+          if (bestMatch) {
+            testcases = bestMatch;
           }
         }
+
       }
     }
+
 
     const content = {
       content: data.data?.repository?.object?.text,
@@ -95,6 +151,7 @@ export const getFileContent = async (req: Request, res: Response) => {
       problem_definition: testcases?.problem_definition,
       problem_hints: testcases?.problem_hints,
       difficulty_level: testcases?.difficulty_level,
+      data_structure: testcases?.data_structure,
       id: testcases?.id,
     };
 
