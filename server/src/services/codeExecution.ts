@@ -8,8 +8,7 @@ import { prisma } from "../Lib/prisma.js";
 import { internalCache } from "../Lib/cache.js";
 import { isGitObjectId } from "../utils/request.js";
 import vm from "node:vm";
-
-
+import { postGraphQL } from "../Lib/githubClient.js";
 
 type SupportedLanguage = "javascript" | "java";
 type ExecutionMode = "RUN" | "SUBMIT";
@@ -826,6 +825,66 @@ const getLevenshteinDistance = (a: string, b: string): number => {
   return previous[b.length] ?? 0;
 };
 
+const fetchAndCacheFileNames = async (): Promise<any[]> => {
+  try {
+    const rawData = await postGraphQL<any>({
+      query: `
+        query {
+          repository(owner: "Devsharma08", name: "DSA-LEETCODE") {
+            object(expression: "main:") {
+              ... on Tree {
+                entries {
+                  name
+                  type
+                  oid
+                }
+              }
+            }
+          }
+        }
+      `,
+    });
+
+    const entries = rawData.data?.repository?.object?.entries;
+    if (!entries) return [];
+
+    const leetcodeEntries = entries.filter(
+      (item: any) => item.type === "blob" && item.name.toLowerCase().startsWith("leetcode")
+    );
+
+    const dbProblemsList = await prisma.problem.findMany({
+      select: { name: true, difficulty_level: true, data_structure: true }
+    });
+    const dbProblemMap = new Map<string, { difficulty_level: string; data_structure: string | null }>();
+    for (const p of dbProblemsList) {
+      dbProblemMap.set(p.name.toLowerCase(), {
+        difficulty_level: p.difficulty_level,
+        data_structure: p.data_structure
+      });
+    }
+
+    const unifiedResponse = leetcodeEntries.map((item: any) => {
+      const parts = item.name.split(".");
+      const baseName = parts[0]?.toLowerCase() || "";
+      const dbProblem = dbProblemMap.get(baseName);
+      const dataStructure = dbProblem?.data_structure || null;
+
+      return {
+        name: item.name,
+        type: item.type,
+        oid: item.oid,
+        data_structure: dataStructure
+      };
+    });
+
+    internalCache.set("getFilesNames", unifiedResponse, 10 * 60);
+    return unifiedResponse;
+  } catch (error) {
+    console.error("Failed to dynamically fetch and cache file names in execution:", error);
+    return [];
+  }
+};
+
 export const executeCode = async (req: Request, res: Response) => {
   const { code, language, oid, mode, customInput } = req.body as ExecuteBody;
 
@@ -884,7 +943,10 @@ export const executeCode = async (req: Request, res: Response) => {
 
     if (!fileData) {
       // Fallback: search in cached filenames
-      const cachedFiles = internalCache.get<any[]>("getFilesNames");
+      let cachedFiles = internalCache.get<any[]>("getFilesNames");
+      if (!cachedFiles || cachedFiles.length === 0) {
+        cachedFiles = await fetchAndCacheFileNames();
+      }
       const matchedFile = cachedFiles?.find((f) => f.oid === githubOid);
       if (matchedFile && typeof matchedFile.name === "string") {
         const baseName = matchedFile.name.split(".")[0];
@@ -990,7 +1052,7 @@ export const executeCode = async (req: Request, res: Response) => {
             output: stdout,
             expectedOutput: currentCase.expectedOutput,
             passed: false,
-            runtimeError: stderr,
+            runtimeError: cleanStderr,
           });
           break;
         }
@@ -1032,13 +1094,24 @@ export const executeCode = async (req: Request, res: Response) => {
         const error = execError as { stdout?: string | Buffer; stderr?: string | Buffer; killed?: boolean };
         const stdout = error.stdout ? String(error.stdout) : "";
         const stderr = error.stderr ? String(error.stderr) : "";
+        let cleanStderr = normalize(stderr);
+        if (executionLanguage === "java") {
+          cleanStderr = cleanStderr
+            .split("\n")
+            .filter((line) => {
+              const trimmed = line.trim().toLowerCase();
+              return !trimmed.startsWith("note:") && !trimmed.includes("recompile with -xlint");
+            })
+            .join("\n")
+            .trim();
+        }
         results.push({
           testCaseIndex: index,
           output: stdout,
           expectedOutput: currentCase.expectedOutput,
           passed: false,
           ...problemIdPayload(currentCase),
-          runtimeError: stderr || (error.killed ? "Execution timed out" : "Timeout or Execution Interruption"),
+          runtimeError: cleanStderr || (error.killed ? "Execution timed out" : "Timeout or Execution Interruption"),
         });
         break;
       }
