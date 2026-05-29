@@ -6,7 +6,15 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { Level, PrismaClient } from "../src/generated/prisma/client.js";
 import { rawProblems, type RawSeedProblem } from "./leetcodeProblems.js";
 
-dotenv.config({ path: path.resolve(process.cwd(), ".env.development") });
+const loadEnv = () => {
+  const envPath = path.resolve(process.cwd(), process.env.NODE_MODE === "production" ? ".env.production" : ".env.development");
+  const result = dotenv.config({ path: envPath, override: true });
+  if (result.error) {
+    const fallbackPath = path.resolve(process.cwd(), ".env");
+    dotenv.config({ path: fallbackPath, override: false });
+  }
+};
+loadEnv();
 
 const MAX_TEST_CASES_PER_PROBLEM = 3;
 const GITHUB_OID_PATTERN = /^[a-f0-9]{40}$/i;

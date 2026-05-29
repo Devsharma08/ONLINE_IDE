@@ -4,7 +4,15 @@ import { Pool } from "pg";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../src/generated/prisma/client.js";
 
-dotenv.config({ path: path.resolve(process.cwd(), ".env.development") });
+const loadEnv = () => {
+  const envPath = path.resolve(process.cwd(), process.env.NODE_MODE === "production" ? ".env.production" : ".env.development");
+  const result = dotenv.config({ path: envPath, override: true });
+  if (result.error) {
+    const fallbackPath = path.resolve(process.cwd(), ".env");
+    dotenv.config({ path: fallbackPath, override: false });
+  }
+};
+loadEnv();
 
 const PROBLEM_CATEGORY_MAP: Record<string, string> = {
   "LeetCode-01E": "array",

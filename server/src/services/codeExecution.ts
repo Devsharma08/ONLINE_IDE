@@ -141,16 +141,44 @@ const getJavaMainWrapper = () => `public class Main {
     Object[] args = new Object[paramTypes.length];
     for (int i = 0; i < paramTypes.length; i++) {
       if (i >= lines.length) {
-        throw new IllegalArgumentException("Not enough input lines. Required " + paramTypes.length + " parameters, but received only " + lines.length);
-      }
-      try {
-        args[i] = parseValue(lines[i], paramTypes[i]);
-      } catch (Exception e) {
-        String typeName = paramTypes[i] instanceof Class<?> ? ((Class<?>)paramTypes[i]).getSimpleName() : paramTypes[i].toString();
-        throw new IllegalArgumentException("Parameter mismatch at index " + i + ": Unable to parse '" + lines[i] + "' as type '" + typeName + "'. Make sure inputs match the problem signature. Error: " + e.getMessage(), e);
+        args[i] = getDefaultValue(paramTypes[i]);
+      } else {
+        try {
+          args[i] = parseValue(lines[i], paramTypes[i]);
+        } catch (Exception e) {
+          String typeName = paramTypes[i] instanceof Class<?> ? ((Class<?>)paramTypes[i]).getSimpleName() : paramTypes[i].toString();
+          throw new IllegalArgumentException("Parameter mismatch at index " + i + ": Unable to parse '" + lines[i] + "' as type '" + typeName + "'. Make sure inputs match the problem signature. Error: " + e.getMessage(), e);
+        }
       }
     }
     return args;
+  }
+
+  private static Object getDefaultValue(java.lang.reflect.Type type) {
+    if (type instanceof Class<?>) {
+      Class<?> clazz = (Class<?>) type;
+      if (clazz == int.class || clazz == Integer.class) return 0;
+      if (clazz == long.class || clazz == Long.class) return 0L;
+      if (clazz == double.class || clazz == Double.class) return 0.0;
+      if (clazz == float.class || clazz == Float.class) return 0.0f;
+      if (clazz == boolean.class || clazz == Boolean.class) return false;
+      if (clazz == char.class || clazz == Character.class) return '\\0';
+      if (clazz == String.class) return "";
+      if (clazz.isArray()) {
+        return java.lang.reflect.Array.newInstance(clazz.getComponentType(), 0);
+      }
+      if (java.util.List.class.isAssignableFrom(clazz)) {
+        return new java.util.ArrayList<>();
+      }
+    }
+    if (type instanceof java.lang.reflect.ParameterizedType) {
+      java.lang.reflect.ParameterizedType parameterized = (java.lang.reflect.ParameterizedType) type;
+      java.lang.reflect.Type rawType = parameterized.getRawType();
+      if (rawType instanceof Class<?> && java.util.List.class.isAssignableFrom((Class<?>) rawType)) {
+        return new java.util.ArrayList<>();
+      }
+    }
+    return null;
   }
 
   private static Object parseValue(String raw, java.lang.reflect.Type type) {
@@ -913,7 +941,7 @@ export const executeCode = async (req: Request, res: Response) => {
     return res.status(400).json({ error: "Custom input must be a string", error_status: "VALIDATION_ERROR" });
   }
 
-  if (githubOid && !isGitObjectId(githubOid)) {
+  if (githubOid && !githubOid.startsWith("local-") && !isGitObjectId(githubOid)) {
     return res.status(400).json({ error: "Invalid problem oid", error_status: "VALIDATION_ERROR" });
   }
 
