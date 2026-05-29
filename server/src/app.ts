@@ -38,7 +38,12 @@ export const createApp = (): Express => {
   app.use(securityHeaders);
   app.use(cors({
     origin: (origin, callback) => {
-      callback(null, !origin || allowedOrigins.has(origin));
+      if (!origin) {
+        callback(null, true);
+        return;
+      }
+      const isAllowed = allowedOrigins.has(origin) || origin.endsWith(".vercel.app");
+      callback(null, isAllowed);
     },
     methods: ["GET", "POST", "OPTIONS"],
     allowedHeaders: ["Content-Type"],
