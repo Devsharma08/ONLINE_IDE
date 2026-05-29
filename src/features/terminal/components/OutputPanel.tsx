@@ -53,6 +53,12 @@ const OutputPanel = ({
   const hasError = output?.details?.some((detail) => detail.runtimeError);
   const allPassed = output?.status === "PASSED" || (output?.passedCases === output?.totalCases && output?.totalCases > 0);
 
+  // Compute aggregate metrics
+  const successfulDetails = output?.details?.filter(d => d.metrics) || [];
+  const totalDuration = successfulDetails.reduce((sum, d) => sum + (d.metrics?.durationMs || 0), 0);
+  const avgDuration = successfulDetails.length > 0 ? totalDuration / successfulDetails.length : 0;
+  const maxMemory = successfulDetails.reduce((max, d) => Math.max(max, d.metrics?.memoryKb || 0), 0);
+
   const handleMaximizeOutput = () => {
     const reservedHeight = 150;
     if (outputHeight === window.innerHeight - reservedHeight) {
@@ -63,13 +69,15 @@ const OutputPanel = ({
     setOutputHeight(maximizedHeight);
   };
 
-  const outputStatus: "LOADING" | "TIMEOUT" | "RUNTIME_ERROR" | "ACCEPTED" | "WRONG_ANSWER" | "IDLE" = isExecuting
+  const outputStatus: "LOADING" | "TIMEOUT" | "RUNTIME_ERROR" | "ACCEPTED" | "WRONG_ANSWER" | "COMPLETED" | "IDLE" = isExecuting
     ? "LOADING"
     : output
     ? hasError
       ? output.details?.some((d) => d.runtimeError?.toLowerCase().includes("timeout"))
         ? "TIMEOUT"
         : "RUNTIME_ERROR"
+      : output.status === "COMPLETED"
+      ? "COMPLETED"
       : allPassed
       ? "ACCEPTED"
       : "WRONG_ANSWER"
@@ -160,7 +168,7 @@ const OutputPanel = ({
             {outputStatus !== "IDLE" && (
               <div
                 className={`flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-none border p-4 shadow-none border-dashed font-mono text-xs tracking-wider ${
-                  outputStatus === "ACCEPTED"
+                  outputStatus === "ACCEPTED" || outputStatus === "COMPLETED"
                     ? "border-emerald-500/30 bg-emerald-950/5 text-emerald-400"
                     : outputStatus === "WRONG_ANSWER"
                     ? "border-rose-500/30 bg-rose-950/5 text-rose-400"
@@ -170,9 +178,9 @@ const OutputPanel = ({
                 }`}
               >
                 <div className="flex items-center gap-3">
-                  {outputStatus === "ACCEPTED" ? (
+                  {outputStatus === "ACCEPTED" || outputStatus === "COMPLETED" ? (
                     <div className="bg-emerald-950/15 border border-emerald-500/30 px-2.5 py-1 text-emerald-400 font-bold">
-                      [ OK ]
+                      {outputStatus === "COMPLETED" ? "[ DONE ]" : "[ OK ]"}
                     </div>
                   ) : outputStatus === "TIMEOUT" ? (
                     <div className="bg-amber-950/15 border border-amber-500/30 px-2.5 py-1 text-amber-400 font-bold">
@@ -188,10 +196,47 @@ const OutputPanel = ({
                       SYS // STATUS_{outputStatus}
                     </div>
                     <div className="text-[10px] text-slate-500 mt-1 uppercase">
-                      {isCustomInputRun
-                        ? "Custom input execution complete."
+                      {isCustomInputRun || outputStatus === "COMPLETED"
+                        ? "Free-form execution complete."
                         : `Passed ${output?.passedCases || 0} of ${output?.totalCases || 0} test cases.`}
                     </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Aggregate Telemetry Benchmarks */}
+            {(avgDuration > 0 || maxMemory > 0) && (
+              <div className="grid grid-cols-2 gap-4 border border-white/10 bg-black/60 p-4 font-mono text-[10px] relative shadow-[0_0_15px_rgba(6,182,212,0.03)] border-l-2 border-l-cyan-500/20">
+                <div className="absolute top-0 right-0 p-2 text-[8px] text-cyan-500/30 select-none uppercase tracking-widest font-bold">
+                  AGGREGATE // SYSTEM_PROFILER
+                </div>
+                
+                <div className="flex flex-col gap-1.5 border-r border-white/5 pr-4">
+                  <span className="text-slate-500 uppercase tracking-widest text-[8.5px] font-bold">// AVG_EXECUTION_TIME</span>
+                  <div className="flex items-baseline gap-1 mt-1">
+                    <span className="text-cyan-400 font-bold text-base md:text-lg tracking-tight">
+                      {avgDuration >= 1 
+                        ? avgDuration.toFixed(3) 
+                        : (avgDuration * 1000).toFixed(0)}
+                    </span>
+                    <span className="text-[9px] text-slate-500 uppercase font-semibold">
+                      {avgDuration >= 1 ? "ms" : "μs"}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-1.5 pl-4">
+                  <span className="text-slate-500 uppercase tracking-widest text-[8.5px] font-bold">// PEAK_HEAP_MEMORY</span>
+                  <div className="flex items-baseline gap-1 mt-1">
+                    <span className="text-emerald-400 font-bold text-base md:text-lg tracking-tight">
+                      {maxMemory >= 1024 
+                        ? (maxMemory / 1024).toFixed(2) 
+                        : maxMemory.toFixed(1)}
+                    </span>
+                    <span className="text-[9px] text-slate-500 uppercase font-semibold">
+                      {maxMemory >= 1024 ? "MB" : "KB"}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -308,6 +353,41 @@ const OutputPanel = ({
 
                     {match && (
                       <div className="border-t border-white/5 pt-3">
+                        {match.metrics && (
+                          <div className="grid grid-cols-2 gap-4 border border-white/5 bg-black/60 p-3 font-mono text-[9px] relative mb-3">
+                            <div className="absolute top-0 right-0 p-1 text-[7px] text-cyan-500/20 select-none uppercase tracking-widest font-bold">
+                              CASE_METRICS // PROFILER
+                            </div>
+                            
+                            <div className="flex flex-col gap-1 border-r border-white/5 pr-3">
+                              <span className="text-slate-600 uppercase tracking-widest text-[8px]">EXECUTION_TIME</span>
+                              <div className="flex items-baseline gap-1">
+                                <span className="text-cyan-400 font-bold text-xs tracking-tight">
+                                  {match.metrics.durationMs >= 1 
+                                    ? match.metrics.durationMs.toFixed(3) 
+                                    : (match.metrics.durationMs * 1000).toFixed(0)}
+                                </span>
+                                <span className="text-[8px] text-slate-500 uppercase">
+                                  {match.metrics.durationMs >= 1 ? "ms" : "μs"}
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="flex flex-col gap-1 pl-2">
+                              <span className="text-slate-600 uppercase tracking-widest text-[8px]">HEAP_MEMORY</span>
+                              <div className="flex items-baseline gap-1">
+                                <span className="text-emerald-400 font-bold text-xs tracking-tight">
+                                  {match.metrics.memoryKb >= 1024 
+                                    ? (match.metrics.memoryKb / 1024).toFixed(2) 
+                                    : match.metrics.memoryKb.toFixed(1)}
+                                </span>
+                                <span className="text-[8px] text-slate-500 uppercase">
+                                  {match.metrics.memoryKb >= 1024 ? "MB" : "KB"}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
                         <div className="text-[9px] font-mono font-bold uppercase tracking-wider text-slate-500 mb-2">EXECUTION_RETURN_RESULTS</div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           {/* Actual return value */}

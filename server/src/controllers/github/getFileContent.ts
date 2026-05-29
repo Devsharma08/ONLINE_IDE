@@ -1,35 +1,44 @@
 import type { Request, Response } from "express";
 import { CACHE_KEYS, GITHUB_OWNER, GITHUB_REPO } from "../../config/github.js";
 import { getCacheKey } from "../../utils/cacheKey.js";
-import { getQueryValue } from "../../utils/request.js";
+import { getQueryValue, isGitObjectId } from "../../utils/request.js";
 import { internalCache } from "../../Lib/cache.js";
 import { postGraphQL } from "../../Lib/githubClient.js";
 import { prisma } from "../../Lib/prisma.js";
 import type { GitHubFileContentResponse } from "../../types/github.js";
 
 
-const getLevenshteinDistance = (a:string,b:string) => {
-  let matrix:number[][] = [];
-  
-  for(let i = 0 ; i <= a.length ; i++ ) matrix[i] = [i];
-  for(let j = 0 ; j <= b.length ; j++) matrix[0][j] = j;
-  for(let i = 1 ;  i <= a.length ; i++){
-    for(let j =1 ; j <= b.length ; j++){
-      matrix[i][j] = Math.min(
-        matrix[i-1][j] + 1,
-        matrix[i][j-1] + 1,
-        matrix[i-1][j-1] + (a[i-1] === b[j-1] ? 0 : 1)
-      )
+const getLevenshteinDistance = (a: string, b: string): number => {
+  let previous = Array.from({ length: b.length + 1 }, (_, index) => index);
+  let current = new Array<number>(b.length + 1).fill(0);
+
+  for (let i = 1; i <= a.length; i++) {
+    current[0] = i;
+
+    for (let j = 1; j <= b.length; j++) {
+      const substitutionCost = a[i - 1] === b[j - 1] ? 0 : 1;
+      current[j] = Math.min(
+        (previous[j] ?? 0) + 1,
+        (current[j - 1] ?? 0) + 1,
+        (previous[j - 1] ?? 0) + substitutionCost
+      );
     }
+
+    [previous, current] = [current, previous];
   }
-  return matrix[a.length][b.length];
-}
+
+  return previous[b.length] ?? 0;
+};
 
 export const getFileContent = async (req: Request, res: Response) => {
   const oid = getQueryValue(req.query.oid);
 
   if (!oid) {
     return res.status(400).json({ error: "Missing required oid query parameter" });
+  }
+
+  if (!isGitObjectId(oid)) {
+    return res.status(400).json({ error: "Invalid oid query parameter" });
   }
 
   const cacheKey = getCacheKey(CACHE_KEYS.fileContent, oid);

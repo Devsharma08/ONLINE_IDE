@@ -8,7 +8,7 @@ const Footer = () => {
         
         <div className="flex flex-col items-center md:items-start text-center md:text-left">
           <span className="text-sm font-bold tracking-widest text-white">
-            DSA // <span className="text-cyan-400">HUB</span>
+            BRACE // <span className="text-cyan-400">RCE</span>
           </span>
           <p className="text-[10px] text-slate-500 mt-1 uppercase">
             BRIDGING_THE_GAP_BETWEEN_LEARNING_AND_DOING
@@ -35,7 +35,7 @@ const Footer = () => {
       
       <div className="w-full border-t border-white/5 py-4 text-center">
         <p className="text-[9px] text-slate-600 uppercase">
-          &copy; {new Date().getFullYear()} DSAHUB. OPEN_SOURCE // BUILT_FOR_DEVELOPERS.
+          &copy; {new Date().getFullYear()} BRACERCE. OPEN_SOURCE // BUILT_FOR_DEVELOPERS.
         </p>
       </div>
     </footer>

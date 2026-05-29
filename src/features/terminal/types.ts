@@ -34,6 +34,10 @@ export type ExecutionDetail = {
   passed: boolean;
   runtimeError?: string | null;
   problemId?: string;
+  metrics?: {
+    durationMs: number;
+    memoryKb: number;
+  } | null;
 };
 
 export type ExecutionResult = {

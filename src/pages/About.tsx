@@ -7,7 +7,7 @@ const About = () => {
       <div className="z-10 mb-12 flex w-full max-w-4xl flex-col items-center text-center sm:mb-16">
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-none border border-cyan-500/20 bg-cyan-950/5 text-xs text-cyan-400 uppercase tracking-wider mb-6 cursor-default">
           <Info className="w-3.5 h-3.5" />
-          SYS // ABOUT_DSA_HUB
+          SYS // ABOUT_BRACERCE
         </div>
         
         <h1 className="mb-6 text-3xl font-extrabold tracking-tight text-white sm:text-4xl md:text-5xl uppercase">
@@ -16,7 +16,7 @@ const About = () => {
         </h1>
         
         <p className="max-w-2xl text-xs leading-relaxed text-slate-400 sm:text-sm uppercase tracking-wide">
-          DSAHub is an open-source platform designed to make exploring Data Structures and Algorithms seamless. By connecting directly to GitHub, it provides a real-time, cached, and interactive way to study code.
+          BraceRCE is an open-source platform designed to make exploring Data Structures and Algorithms seamless by connecting directly to GitHub and online IDE for simpler and secure and fast code execution.
         </p>
       </div>
 

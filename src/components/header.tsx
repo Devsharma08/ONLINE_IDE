@@ -15,7 +15,7 @@ const Header = () => {
                <Terminal className='w-4 h-4 text-cyan-400' />
             </div>
             <span className='text-sm uppercase tracking-widest text-white font-bold'>
-               DSA // <span className='text-cyan-400'>HUB</span>
+               BRACE // <span className='text-cyan-400'>RCE</span>
             </span>
          </Link>
          

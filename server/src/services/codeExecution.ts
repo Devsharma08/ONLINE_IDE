@@ -1,4 +1,4 @@
-import { exec } from "child_process";
+import { execFile } from "child_process";
 import type { Request, Response } from "express";
 import fs from "fs/promises";
 import path from "path";
@@ -6,6 +6,7 @@ import { promisify } from "util";
 import { v4 as uuidv4 } from "uuid";
 import { prisma } from "../Lib/prisma.js";
 import { internalCache } from "../Lib/cache.js";
+import { isGitObjectId } from "../utils/request.js";
 import vm from "node:vm";
 
 
@@ -39,9 +40,26 @@ type ExecutionDetail = {
   passed: boolean;
   problemId?: string;
   runtimeError: string | null;
+  metrics?: {
+    durationMs: number;
+    memoryKb: number;
+  } | null;
 };
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
+
+const EXECUTION_TIMEOUT_MS = 20_000;
+const DOCKER_TIMEOUT_MS = EXECUTION_TIMEOUT_MS + 5_000;
+const MAX_CODE_BYTES = 50_000;
+const MAX_CUSTOM_INPUT_BYTES = 20_000;
+const MAX_DOCKER_OUTPUT_BYTES = 1024 * 1024;
+const MAX_SUBMIT_TEST_CASES = 25;
+
+const getByteLength = (value: string) => Buffer.byteLength(value, "utf8");
+
+const isInProcessFallbackEnabled = () => {
+  return process.env.NODE_MODE !== "production" && process.env.ALLOW_IN_PROCESS_JS_FALLBACK === "true";
+};
 
 const normalize = (value: string) => (value || "").replace(/\r\n/g, "\n").trim();
 
@@ -49,12 +67,16 @@ const problemIdPayload = (currentCase: TestCaseRecord) => {
   return currentCase.problemId ? { problemId: currentCase.problemId } : {};
 };
 
-const getExecutionMode = (mode: unknown): ExecutionMode => {
-  return mode === "SUBMIT" ? "SUBMIT" : "RUN";
+const getExecutionMode = (mode: unknown): ExecutionMode | null => {
+  if (mode === undefined || mode === null || mode === "") {
+    return "RUN";
+  }
+
+  return mode === "RUN" || mode === "SUBMIT" ? mode : null;
 };
 
-const getLanguage = (language: unknown): SupportedLanguage => {
-  return language === "java" ? "java" : "javascript";
+const getLanguage = (language: unknown): SupportedLanguage | null => {
+  return language === "javascript" || language === "java" ? language : null;
 };
 
 const getJavaImports = () => {
@@ -69,7 +91,9 @@ const extractJsExportName = (wrapperCode: string): string | null => {
   return match ? match[1] ?? null : null;
 };
 
-const getJavaScriptRunner = (exportName: string) => `const fs = require("fs");\nconst path = require("path");\nconst exported = require("./index.js");\nconst fn = typeof exported === "function" ? exported : exported && typeof exported === "object" ? exported["${exportName}"] || exported[Object.keys(exported)[0]] : null;\nif (typeof fn !== "function") {\n  throw new Error("Could not resolve exported function for execution");\n}\nconst rawInput = fs.readFileSync(path.join(__dirname, "input.txt"), "utf8");\nconst lines = rawInput.replace(/\\r\\n/g, "\\n").split("\\n").filter((line) => line.length > 0);\nconst parseValue = (value) => {\n  const trimmed = value.trim();\n  if (trimmed === "true") return true;\n  if (trimmed === "false") return false;\n  if (/^[-+]?[0-9]+$/.test(trimmed)) return Number.parseInt(trimmed, 10);\n  if (/^[-+]?[0-9]*\\.[0-9]+$/.test(trimmed)) return Number.parseFloat(trimmed);\n  if (/^[\\\[\\{][\\s\\S]*[\\\]\\}]$/.test(trimmed) || (/^\\\".*\\\"$/.test(trimmed) || /^\\\'.*\\\'$/.test(trimmed))) {\n    try {\n      return new Function("return " + trimmed)();\n    } catch (e) {\n      try {\n        return JSON.parse(trimmed);\n      } catch (e2) {\n        return trimmed.replace(/^['\"]|['\"]$/g, "");\n      }\n    }\n  }\n  return trimmed;\n};\nconst args = lines.map(parseValue);\n(async () => {\n  try {\n    if ("${exportName}" === "TimeLimitedCache") {\n      const cache = new fn();\n      const outputs = [];\n      const rawActions = rawInput.trim();\n      const regex = /(set|get|wait|count)\\(([^)]*)\\)/g;\n      let match;\n      while ((match = regex.exec(rawActions)) !== null) {\n        const method = match[1];\n        const rawArgs = match[2];\n        const argsList = rawArgs ? rawArgs.split(",").map(s => {\n          const trimmed = s.trim();\n          if (trimmed.startsWith("'") && trimmed.endsWith("'")) return trimmed.slice(1, -1);\n          if (trimmed.startsWith('"') && trimmed.endsWith('"')) return trimmed.slice(1, -1);\n          if (trimmed === "true") return true;\n          if (trimmed === "false") return false;\n          return Number(trimmed);\n        }) : [];\n        if (method === "set") {\n          cache.set(...argsList);\n        } else if (method === "get") {\n          const res = cache.get(...argsList);\n          const val = (res === -1 || res === undefined) ? "undefined" : res;\n          outputs.push(val);\n        } else if (method === "count") {\n          const res = cache.count();\n          outputs.push(res);\n        } else if (method === "wait") {\n          const ms = argsList[0] || 0;\n          await new Promise(resolve => setTimeout(resolve, ms));\n        }\n      }\n      console.log(outputs.join(","));\n      return;\n    }\n    if ("${exportName}" === "timeLimit") {\n      const limitFn = fn(async (x) => {\n        await new Promise(res => setTimeout(res, x));\n        return "Result";\n      }, 100);\n      const res1 = await limitFn(50).catch(err => err instanceof Error ? err.message : String(err));\n      const res2 = await limitFn(150).catch(err => err instanceof Error ? err.message : String(err));\n      if (res1 === "Result" && (res2 === "Time Limit Exceeded" || res2.includes("Time Limit"))) {\n        console.log("Result or timeout");\n      } else {\n        console.log("Failed Promise Time Limit: " + res1 + " | " + res2);\n      }\n      return;\n    }\n    if ("${exportName}" === "debounce") {\n      let count = 0;\n      const debounced = fn(() => { count++; }, 100);\n      debounced();\n      debounced();\n      debounced();\n      await new Promise(res => setTimeout(res, 50));\n      const countAfter50 = count;\n      await new Promise(res => setTimeout(res, 100));\n      const countAfter150 = count;\n      if (countAfter50 === 0 && countAfter150 === 1) {\n        console.log("Delayed execution");\n      } else {\n        console.log("Failed Debounce: " + countAfter50 + " | " + countAfter150);\n      }\n      return;\n    }\n    if ("${exportName}" === "promiseAll") {\n      const fn1 = () => new Promise(resolve => setTimeout(() => resolve(5), 10));\n      const fn2 = () => new Promise(resolve => setTimeout(() => resolve(10), 20));\n      const result = await fn([fn1, fn2]);\n      if (result && result[0] === 5 && result[1] === 10) {\n        console.log("Both resolved");\n      } else {\n        console.log("Failed promiseAll: " + JSON.stringify(result));\n      }\n      return;\n    }\n    const result = await fn(...args);\n    if (result !== undefined) {\n      if (result !== null && typeof result === "object" && typeof result.then === "function") {\n        const resolved = await result;\n        if (resolved !== undefined) {\n          console.log(typeof resolved === "object" ? JSON.stringify(resolved) : resolved);\n        }\n      } else if (typeof result === "object") {\n        console.log(JSON.stringify(result));\n      } else {\n        console.log(result);\n      }\n    }\n  } catch (err) {\n    console.error("Execution Error:", err instanceof Error ? err.message : String(err));\n    process.exit(1);\n  }\n})();`;
+
+
+const getJavaScriptRunner = (exportName: string) => `const fs = require("fs");\nconst path = require("path");\nconst exported = require("./index.js");\nconst fn = typeof exported === "function" ? exported : exported && typeof exported === "object" ? exported["${exportName}"] || exported[Object.keys(exported)[0]] : null;\nif (typeof fn !== "function") {\n  throw new Error("Could not resolve exported function for execution");\n}\nconst rawInput = fs.readFileSync(path.join(__dirname, "input.txt"), "utf8");\nconst lines = rawInput.replace(/\\r\\n/g, "\\n").split("\\n").filter((line) => line.length > 0);\nconst parseValue = (value) => {\n  const trimmed = value.trim();\n  if (trimmed === "true") return true;\n  if (trimmed === "false") return false;\n  if (/^[-+]?[0-9]+$/.test(trimmed)) return Number.parseInt(trimmed, 10);\n  if (/^[-+]?[0-9]*\\.[0-9]+$/.test(trimmed)) return Number.parseFloat(trimmed);\n  if (/^[\"'].*[\"']$/.test(trimmed)) return trimmed.replace(/^['\"]|['\"]$/g, "");\n  if (/^[\\\[\\{][\\s\\S]*[\\\]\\}]$/.test(trimmed)) {\n    try {\n      return JSON.parse(trimmed);\n    } catch (e) {\n      return trimmed;\n    }\n  }\n  return trimmed;\n};\nconst args = lines.map(parseValue);\n(async () => {\n  try {\n    if ("${exportName}" === "TimeLimitedCache") {\n      const cache = new fn();\n      const outputs = [];\n      const rawActions = rawInput.trim();\n      const regex = /(set|get|wait|count)\\(([^)]*)\\)/g;\n      let match;\n      while ((match = regex.exec(rawActions)) !== null) {\n        const method = match[1];\n        const rawArgs = match[2];\n        const argsList = rawArgs ? rawArgs.split(",").map(s => {\n          const trimmed = s.trim();\n          if (trimmed.startsWith("'") && trimmed.endsWith("'")) return trimmed.slice(1, -1);\n          if (trimmed.startsWith('"') && trimmed.endsWith('"')) return trimmed.slice(1, -1);\n          if (trimmed === "true") return true;\n          if (trimmed === "false") return false;\n          return Number(trimmed);\n        }) : [];\n        if (method === "set") {\n          cache.set(...argsList);\n        } else if (method === "get") {\n          const res = cache.get(...argsList);\n          const val = (res === -1 || res === undefined) ? "undefined" : res;\n          outputs.push(val);\n        } else if (method === "count") {\n          const res = cache.count();\n          outputs.push(res);\n        } else if (method === "wait") {\n          const ms = argsList[0] || 0;\n          await new Promise(resolve => setTimeout(resolve, ms));\n        }\n      }\n      console.log(outputs.join(","));\n      return;\n    }\n    if ("${exportName}" === "timeLimit") {\n      const limitFn = fn(async (x) => {\n        await new Promise(res => setTimeout(res, x));\n        return "Result";\n      }, 100);\n      const res1 = await limitFn(50).catch(err => err instanceof Error ? err.message : String(err));\n      const res2 = await limitFn(150).catch(err => err instanceof Error ? err.message : String(err));\n      if (res1 === "Result" && (res2 === "Time Limit Exceeded" || res2.includes("Time Limit"))) {\n        console.log("Result or timeout");\n      } else {\n        console.log("Failed Promise Time Limit: " + res1 + " | " + res2);\n      }\n      return;\n    }\n    if ("${exportName}" === "debounce") {\n      let count = 0;\n      const debounced = fn(() => { count++; }, 100);\n      debounced();\n      debounced();\n      debounced();\n      await new Promise(res => setTimeout(res, 50));\n      const countAfter50 = count;\n      await new Promise(res => setTimeout(res, 100));\n      const countAfter150 = count;\n      if (countAfter50 === 0 && countAfter150 === 1) {\n        console.log("Delayed execution");\n      } else {\n        console.log("Failed Debounce: " + countAfter50 + " | " + countAfter150);\n      }\n      return;\n    }\n    if ("${exportName}" === "promiseAll") {\n      const fn1 = () => new Promise(resolve => setTimeout(() => resolve(5), 10));\n      const fn2 = () => new Promise(resolve => setTimeout(() => resolve(10), 20));\n      const result = await fn([fn1, fn2]);\n      if (result && result[0] === 5 && result[1] === 10) {\n        console.log("Both resolved");\n      } else {\n        console.log("Failed promiseAll: " + JSON.stringify(result));\n      }\n      return;\n    }\n    const startMem = process.memoryUsage().heapUsed;\n    const startTime = process.hrtime.bigint();\n    const result = await fn(...args);\n    const endTime = process.hrtime.bigint();\n    const endMem = process.memoryUsage().heapUsed;\n    const durationMs = Number(endTime - startTime) / 1000000;\n    const memoryKb = Math.max(0, (endMem - startMem) / 1024);\n    if (result !== undefined) {\n      if (result !== null && typeof result === "object" && typeof result.then === "function") {\n        const resolved = await result;\n        if (resolved !== undefined) {\n          console.log(typeof resolved === "object" ? JSON.stringify(resolved) : resolved);\n        }\n      } else if (typeof result === "object") {\n        console.log(JSON.stringify(result));\n      } else {\n        console.log(result);\n      }\n    }\n    console.log(\"// SYS_METRICS: time=\" + durationMs.toFixed(3) + \" ms, memory=\" + memoryKb.toFixed(1) + \" KB\");\n  } catch (err) {\n    console.error(\"Execution Error:\", err instanceof Error ? err.message : String(err));\n    process.exit(1);\n  }\n})();`;
 
 // checking wrappercode contains // test wrapper comment
 const isDefaultJavaWrapper = (wrapperCode: string) => wrapperCode.includes("// Test wrapper");
@@ -93,7 +117,16 @@ const getJavaMainWrapper = () => `public class Main {
     Object instance = java.lang.reflect.Modifier.isStatic(target.getModifiers()) ? null : Solution.class.getDeclaredConstructor().newInstance();
 
     Object[] parsedArgs = parseArguments(target.getGenericParameterTypes(), lines);
+
+    long startMem = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
+    long startTime = System.nanoTime();
     Object result = target.invoke(instance, parsedArgs);
+    long endTime = System.nanoTime();
+    long endMem = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
+
+    double durationMs = (endTime - startTime) / 1000000.0;
+    double memoryKb = Math.max(0, (endMem - startMem) / 1024.0);
+
     if (target.getReturnType() == void.class) {
       if (parsedArgs.length > 0) {
         System.out.println(format(parsedArgs[0]));
@@ -101,6 +134,8 @@ const getJavaMainWrapper = () => `public class Main {
     } else if (result != null) {
       System.out.println(format(result));
     }
+
+    System.out.println("// SYS_METRICS: time=" + String.format("%.3f", durationMs) + " ms, memory=" + String.format("%.1f", memoryKb) + " KB");
   }
 
   private static Object[] parseArguments(java.lang.reflect.Type[] paramTypes, String[] lines) {
@@ -663,7 +698,7 @@ class Node {
     await fs.writeFile(path.join(tempDir, "Main.java"), processedCode);
 
     return {
-      dockerImage: "eclipse-temurin:17-alpine",
+      dockerImage: "amazoncorretto:17-alpine",
       runCommand: "javac Main.java && java Main < input.txt",
     };
   }
@@ -679,10 +714,10 @@ class Node {
 
     const matchFunction = /function\s+([A-Za-z_$][\w$]*)\s*\(/.exec(codeWithoutComment);
     if (matchFunction) {
-      exportName = matchFunction[1];
+      exportName = matchFunction[1] ?? null;
     } else {
       const matchVar = /(?:var|let|const)\s+([A-Za-z_$][\w$]*)\s*=\s*/.exec(codeWithoutComment);
-      if (matchVar) exportName = matchVar[1];
+      if (matchVar) exportName = matchVar[1] ?? null;
     }
   }
 
@@ -709,7 +744,7 @@ class Node {
 };
 
 
-const buildDockerCommand = ({
+const buildDockerArgs = ({
   dockerImage,
   runCommand,
   tempDir,
@@ -718,52 +753,118 @@ const buildDockerCommand = ({
   runCommand: string;
   tempDir: string;
 }) => {
-  return `docker run --rm \
-                --network none \
-                --user 1000:1000 \
-                --pids-limit 64 \
-                --memory="128m" \
-                --cpus=".5" \
-                -v "${tempDir}:/app" \
-                -w /app \
-                ${dockerImage} \
-                sh -c "timeout 20s ${runCommand}"`;
+  return [
+    "run",
+    "--rm",
+    "--init",
+    "--network",
+    "none",
+    "--user",
+    "1000:1000",
+    "--cap-drop=ALL",
+    "--security-opt",
+    "no-new-privileges",
+    "--read-only",
+    "--tmpfs",
+    "/tmp:rw,noexec,nosuid,size=64m",
+    "--pids-limit",
+    "64",
+    "--memory",
+    "128m",
+    "--memory-swap",
+    "128m",
+    "--cpus",
+    ".5",
+    "-v",
+    `${tempDir}:/app:rw`,
+    "-w",
+    "/app",
+    dockerImage,
+    "sh",
+    "-c",
+    `timeout ${Math.ceil(EXECUTION_TIMEOUT_MS / 1000)}s ${runCommand}`,
+  ];
+};
+
+const executeInDocker = async (options: {
+  dockerImage: string;
+  runCommand: string;
+  tempDir: string;
+}) => {
+  const args = buildDockerArgs(options);
+  const { stdout, stderr } = await execFileAsync("docker", args, {
+    timeout: DOCKER_TIMEOUT_MS,
+    maxBuffer: MAX_DOCKER_OUTPUT_BYTES,
+    windowsHide: true,
+  });
+
+  return {
+    stdout: String(stdout),
+    stderr: String(stderr),
+  };
 };
 
 const getLevenshteinDistance = (a: string, b: string): number => {
-  const matrix: number[][] = [];
-
-  for (let i = 0; i <= a.length; i++) {
-    matrix[i] = [i];
-  }
-
-  for (let j = 0; j <= b.length; j++) {
-    matrix[0][j] = j;
-  }
+  let previous = Array.from({ length: b.length + 1 }, (_, index) => index);
+  let current = new Array<number>(b.length + 1).fill(0);
 
   for (let i = 1; i <= a.length; i++) {
+    current[0] = i;
+
     for (let j = 1; j <= b.length; j++) {
-      matrix[i][j] = Math.min(
-        matrix[i - 1][j] + 1,
-        matrix[i][j - 1] + 1,
-        matrix[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)
-      )
+      const substitutionCost = a[i - 1] === b[j - 1] ? 0 : 1;
+      current[j] = Math.min(
+        (previous[j] ?? 0) + 1,
+        (current[j - 1] ?? 0) + 1,
+        (previous[j - 1] ?? 0) + substitutionCost
+      );
     }
+
+    [previous, current] = [current, previous];
   }
-  return matrix[a.length][b.length]
-}
+
+  return previous[b.length] ?? 0;
+};
 
 export const executeCode = async (req: Request, res: Response) => {
   const { code, language, oid, mode, customInput } = req.body as ExecuteBody;
 
   const sourceCode = typeof code === "string" ? code : "";
-  const githubOid = typeof oid === "string" ? oid : "";
+  const githubOid = typeof oid === "string" ? oid.trim() : "";
   const executionMode = getExecutionMode(mode);
   const executionLanguage = getLanguage(language);
   const customInputValue = typeof customInput === "string" ? customInput.trim() : "";
   const useCustomInput = customInputValue.length > 0; // in case of custom input data
   const jobId = uuidv4();
   const tempDir = path.join(process.cwd(), "temp", jobId);
+
+  if (typeof code !== "string" || sourceCode.trim().length === 0) {
+    return res.status(400).json({ error: "Code is required", error_status: "VALIDATION_ERROR" });
+  }
+
+  if (!executionLanguage) {
+    return res.status(400).json({ error: "Unsupported language", error_status: "VALIDATION_ERROR" });
+  }
+
+  if (!executionMode) {
+    return res.status(400).json({ error: "Unsupported execution mode", error_status: "VALIDATION_ERROR" });
+  }
+
+  if (customInput !== undefined && typeof customInput !== "string") {
+    return res.status(400).json({ error: "Custom input must be a string", error_status: "VALIDATION_ERROR" });
+  }
+
+  if (githubOid && !isGitObjectId(githubOid)) {
+    return res.status(400).json({ error: "Invalid problem oid", error_status: "VALIDATION_ERROR" });
+  }
+
+  if (getByteLength(sourceCode) > MAX_CODE_BYTES) {
+    return res.status(413).json({ error: "Code payload is too large", error_status: "VALIDATION_ERROR" });
+  }
+
+  if (getByteLength(customInputValue) > MAX_CUSTOM_INPUT_BYTES) {
+    return res.status(413).json({ error: "Custom input is too large", error_status: "VALIDATION_ERROR" });
+  }
 
   let testCases: TestCaseRecord[] = [];
   let codeSnippets: CodeSnippetRecord[] = [];
@@ -845,20 +946,13 @@ export const executeCode = async (req: Request, res: Response) => {
     testCases = (fileData?.test_cases ?? []) as TestCaseRecord[];
     codeSnippets = (fileData?.code_snippets ?? []) as CodeSnippetRecord[];
     wrapperCode = codeSnippets.find((snippet) => snippet.language === executionLanguage)?.wrapperCode ?? "";
-     if (testCases.length === 0 && !useCustomInput) {
-      return res.status(400).json({
-        error: "Execution Aborted: Missing Test Cases",
-        details: "This problem file is a custom repository addition and does not have pre-seeded database test cases.\n\nPlease toggle the 'Custom Input' checkbox and specify your test case input (e.g. tree format like [3,1,4,3,null,1,5]) in the custom input text box to execute your solution!",
-        error_status: "VALIDATION_ERROR",
-        execution_status: "ERROR"
-      });
-    }
+
     const casesToRun = useCustomInput
       ? [{ input: customInputValue, expectedOutput: "" }]
       : testCases.length === 0
         ? [{ input: "", expectedOutput: "" }]
         : executionMode === "SUBMIT"
-          ? testCases
+          ? testCases.slice(0, MAX_SUBMIT_TEST_CASES)
           : testCases.slice(0, 1);
 
     const { dockerImage, runCommand } = await prepareSourceFile({
@@ -875,10 +969,8 @@ export const executeCode = async (req: Request, res: Response) => {
       const testCasePath = path.join(tempDir, "input.txt");
       await fs.writeFile(testCasePath, (currentCase.input || "").trim());
 
-      const dockerCmd = buildDockerCommand({ dockerImage, runCommand, tempDir });
-
       try {
-        const { stdout, stderr } = await execAsync(dockerCmd);
+        const { stdout, stderr } = await executeInDocker({ dockerImage, runCommand, tempDir });
 
         let cleanStderr = normalize(stderr);
         if (executionLanguage === "java") {
@@ -905,57 +997,74 @@ export const executeCode = async (req: Request, res: Response) => {
 
 
         const actualOutput = normalize(stdout);
+
+        let durationMs = 0;
+        let memoryKb = 0;
+        let cleanedOutput = actualOutput;
+
+        const metricsMatch = /\/\/ SYS_METRICS: time=([\d.]+)\s*ms,\s*memory=([\d.]+)\s*KB/.exec(actualOutput);
+        if (metricsMatch) {
+          durationMs = parseFloat(metricsMatch[1] || "0");
+          memoryKb = parseFloat(metricsMatch[2] || "0");
+          cleanedOutput = actualOutput.replace(/\/\/ SYS_METRICS: time=[\d.]+\s*ms,\s*memory=[\d.]+\s*KB/, "").trim();
+        }
+
         const expectedOutput = normalize(currentCase.expectedOutput);
-        const passed = actualOutput === expectedOutput;
+        const isFreeForm = testCases.length === 0 || useCustomInput;
+        const passed = isFreeForm ? true : cleanedOutput === expectedOutput;
 
         if (passed) totalPassed++;
 
         results.push({
           testCaseIndex: index,
-          output: stdout,
+          output: cleanedOutput,
           expectedOutput: currentCase.expectedOutput,
           passed,
           ...problemIdPayload(currentCase),
           runtimeError: null,
+          metrics: metricsMatch ? { durationMs, memoryKb } : null,
         });
 
         if (executionMode === "SUBMIT" && !passed) {
           break;
         }
       } catch (execError) {
-        const error = execError as { stdout?: string; stderr?: string };
+        const error = execError as { stdout?: string | Buffer; stderr?: string | Buffer; killed?: boolean };
+        const stdout = error.stdout ? String(error.stdout) : "";
+        const stderr = error.stderr ? String(error.stderr) : "";
         results.push({
           testCaseIndex: index,
-          output: error.stdout || "",
+          output: stdout,
           expectedOutput: currentCase.expectedOutput,
           passed: false,
           ...problemIdPayload(currentCase),
-          runtimeError: error.stderr || "Timeout or Execution Interruption",
+          runtimeError: stderr || (error.killed ? "Execution timed out" : "Timeout or Execution Interruption"),
         });
         break;
       }
     }
 
+    const isFreeForm = testCases.length === 0 || useCustomInput;
     return res.json({
       mode: executionMode,
       totalCases: casesToRun.length,
-      passedCases: totalPassed,
-      passed: useCustomInput ? true : totalPassed === casesToRun.length,
-      status: useCustomInput ? "COMPLETED" : totalPassed === casesToRun.length ? "PASSED" : "FAILED",
-      problemId: useCustomInput ? "" : testCases[0]?.problemId || "",
+      passedCases: isFreeForm ? casesToRun.length : totalPassed,
+      passed: isFreeForm ? true : totalPassed === casesToRun.length,
+      status: isFreeForm ? "COMPLETED" : totalPassed === casesToRun.length ? "PASSED" : "FAILED",
+      problemId: isFreeForm ? "" : testCases[0]?.problemId || "",
       details: results,
       error: results.find((r) => r.runtimeError)?.runtimeError || null,
-      execution_status: totalPassed === casesToRun.length ? "SUCCESS" : 'ERROR',
+      execution_status: (isFreeForm || totalPassed === casesToRun.length) ? "SUCCESS" : 'ERROR',
     });
   } catch (error) {
-    if (executionLanguage === "javascript") {
+    if (executionLanguage === "javascript" && isInProcessFallbackEnabled()) {
       try {
         const testCasesToRun = useCustomInput
           ? [{ input: customInputValue, expectedOutput: "" }]
           : testCases.length === 0
             ? [{ input: "", expectedOutput: "" }]
             : executionMode === "SUBMIT"
-              ? testCases
+              ? testCases.slice(0, MAX_SUBMIT_TEST_CASES)
               : testCases.slice(0, 1);
 
         const localResults: ExecutionDetail[] = [];
@@ -1000,10 +1109,10 @@ export const executeCode = async (req: Request, res: Response) => {
 
             const matchFunction = /function\s+([A-Za-z_$][\w$]*)\s*\(/.exec(codeWithoutComment);
             if (matchFunction) {
-              exportName = matchFunction[1];
+              exportName = matchFunction[1] ?? null;
             } else {
               const matchVar = /(?:var|let|const)\s+([A-Za-z_$][\w$]*)\s*=\s*/.exec(codeWithoutComment);
-              if (matchVar) exportName = matchVar[1];
+              if (matchVar) exportName = matchVar[1] ?? null;
             }
           }
 
@@ -1014,7 +1123,7 @@ export const executeCode = async (req: Request, res: Response) => {
 
           const context = vm.createContext(sandbox);
           const userScript = new vm.Script(combinedSource, { filename: "solution.js" });
-          userScript.runInContext(context);
+          userScript.runInContext(context, { timeout: 1000 });
           let stdoutValue = "";
           let runtimeErrorVal: string | null = null;
 
@@ -1039,15 +1148,14 @@ export const executeCode = async (req: Request, res: Response) => {
                 if (trimmed === "false") return false;
                 if (/^[-+]?[0-9]+$/.test(trimmed)) return Number.parseInt(trimmed, 10);
                 if (/^[-+]?[0-9]*\.[0-9]+$/.test(trimmed)) return Number.parseFloat(trimmed);
-                if (/^[\[\{][\s\S]*[\]\}]$/.test(trimmed) || (/^\".*\"$/.test(trimmed) || /^\'.*\'$/.test(trimmed))) {
+                if (/^["'].*["']$/.test(trimmed)) {
+                  return trimmed.replace(/^['"]|['"]$/g, "");
+                }
+                if (/^[\[\{][\s\S]*[\]\}]$/.test(trimmed)) {
                   try {
-                    return new Function("return " + trimmed)();
+                    return JSON.parse(trimmed);
                   } catch (e) {
-                    try {
-                      return JSON.parse(trimmed);
-                    } catch (e2) {
-                      return trimmed.replace(/^['"]|['"]$/g, "");
-                    }
+                    return trimmed;
                   }
                 }
                 return trimmed;
@@ -1082,8 +1190,8 @@ export const executeCode = async (req: Request, res: Response) => {
                     const res = cache.count();
                     outputs.push(res);
                   } else if (method === "wait") {
-                    const ms = argsList[0] || 0;
-                    await new Promise(resolve => setTimeout(resolve, ms));
+                    const ms = Number(argsList[0] || 0);
+                    await new Promise(resolve => setTimeout(resolve, Number.isFinite(ms) ? ms : 0));
                   }
                 }
                 result = outputs.join(",");
@@ -1124,12 +1232,19 @@ export const executeCode = async (req: Request, res: Response) => {
                   result = "Failed promiseAll: " + JSON.stringify(res);
                 }
               } else {
+                const startMem = process.memoryUsage().heapUsed;
+                const startTime = process.hrtime.bigint();
                 const rawResult = fn(...args);
                 if (rawResult !== null && typeof rawResult === "object" && typeof rawResult.then === "function") {
                   result = await rawResult;
                 } else {
                   result = rawResult;
                 }
+                const endTime = process.hrtime.bigint();
+                const endMem = process.memoryUsage().heapUsed;
+                const durationMs = Number(endTime - startTime) / 1000000;
+                const memoryKb = Math.max(0, (endMem - startMem) / 1024);
+                logs.push(`// SYS_METRICS: time=${durationMs.toFixed(3)} ms, memory=${memoryKb.toFixed(1)} KB`);
               }
 
               let resultStr = "";
@@ -1146,8 +1261,21 @@ export const executeCode = async (req: Request, res: Response) => {
           }
 
           const actualOutput = normalize(stdoutValue);
+
+          let durationMs = 0;
+          let memoryKb = 0;
+          let cleanedOutput = actualOutput;
+
+          const metricsMatch = /\/\/ SYS_METRICS: time=([\d.]+)\s*ms,\s*memory=([\d.]+)\s*KB/.exec(actualOutput);
+          if (metricsMatch) {
+            durationMs = parseFloat(metricsMatch[1] || "0");
+            memoryKb = parseFloat(metricsMatch[2] || "0");
+            cleanedOutput = actualOutput.replace(/\/\/ SYS_METRICS: time=[\d.]+\s*ms,\s*memory=[\d.]+\s*KB/, "").trim();
+          }
+
           const expectedOutput = normalize(currentCase.expectedOutput);
-          const passed = runtimeErrorVal === null && actualOutput === expectedOutput;
+          const isFreeForm = testCases.length === 0 || useCustomInput;
+          const passed = runtimeErrorVal === null && (isFreeForm ? true : cleanedOutput === expectedOutput);
 
           if (passed) {
             localPassedCount++;
@@ -1155,11 +1283,12 @@ export const executeCode = async (req: Request, res: Response) => {
 
           localResults.push({
             testCaseIndex: index,
-            output: stdoutValue,
+            output: cleanedOutput,
             expectedOutput: currentCase.expectedOutput,
             passed,
             ...problemIdPayload(currentCase),
             runtimeError: runtimeErrorVal,
+            metrics: metricsMatch ? { durationMs, memoryKb } : null,
           });
 
           if (executionMode === "SUBMIT" && !passed) {
@@ -1167,16 +1296,17 @@ export const executeCode = async (req: Request, res: Response) => {
           }
         }
 
+        const isFreeForm = testCases.length === 0 || useCustomInput;
         return res.json({
           mode: executionMode,
           totalCases: testCasesToRun.length,
-          passedCases: localPassedCount,
-          passed: useCustomInput ? true : localPassedCount === testCasesToRun.length,
-          status: useCustomInput ? "COMPLETED" : localPassedCount === testCasesToRun.length ? "PASSED" : "FAILED",
-          problemId: useCustomInput ? "" : testCases[0]?.problemId || "",
+          passedCases: isFreeForm ? testCasesToRun.length : localPassedCount,
+          passed: isFreeForm ? true : localPassedCount === testCasesToRun.length,
+          status: isFreeForm ? "COMPLETED" : localPassedCount === testCasesToRun.length ? "PASSED" : "FAILED",
+          problemId: isFreeForm ? "" : testCases[0]?.problemId || "",
           details: localResults,
           error: localResults.find((r) => r.runtimeError)?.runtimeError || null,
-          execution_status: localPassedCount === testCasesToRun.length ? "SUCCESS" : 'ERROR',
+          execution_status: (isFreeForm || localPassedCount === testCasesToRun.length) ? "SUCCESS" : 'ERROR',
         });
       } catch (sandboxErr) {
         const message = sandboxErr instanceof Error ? sandboxErr.message : "Sandbox crash";
@@ -1192,12 +1322,13 @@ export const executeCode = async (req: Request, res: Response) => {
 
     if (
       message.toLowerCase().includes("docker: command not found") ||
+      message.toLowerCase().includes("enoent") ||
       message.toLowerCase().includes("cannot connect to the docker daemon") ||
       message.toLowerCase().includes("docker daemon is not running") ||
       message.toLowerCase().includes("is the docker daemon running") ||
       message.toLowerCase().includes("error during connect")
     ) {
-      message = "DOCKER_DAEMON_OFFLINE: The Docker service is missing or not active on the host machine. Please start Docker Desktop to compile and execute Java solutions.";
+      message = "DOCKER_DAEMON_OFFLINE: The Docker service is missing or not active on the host machine. Please start Docker Desktop to compile and execute code securely.";
     }
 
     console.error("System Core Fault:", error);

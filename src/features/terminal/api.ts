@@ -1,7 +1,7 @@
 import type { FileEntry } from "../../context/fileNamesContext";
 import type { ExecuteCodeRequest, ExecutionResult, FileContentResponse } from "./types";
 
-const API_BASE_URL = "http://localhost:5000/api";
+const API_BASE_URL = `${(import.meta.env.VITE_API_URL || "http://localhost:5000").replace(/\/+$/, "")}/api`;
 
 const getErrorMessage = (payload: unknown, fallback: string) => {
   if (payload && typeof payload === "object") {
@@ -30,7 +30,7 @@ export const fetchFileNames = async () => {
 };
 
 export const fetchFileContent = async (oid: string) => {
-  const response = await fetch(`${API_BASE_URL}/github/filecontent?oid=${oid}`);
+  const response = await fetch(`${API_BASE_URL}/github/filecontent?oid=${encodeURIComponent(oid)}`);
 
   if (!response.ok) {
     throw new Error("Failed to load file content");
