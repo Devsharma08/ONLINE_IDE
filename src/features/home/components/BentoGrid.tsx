@@ -15,7 +15,7 @@ const BentoGrid = () => {
           <Link
             key={item.title}
             to={`/ds/${item.slug}`}
-            className={`group relative flex flex-row items-center justify-between gap-6 overflow-hidden rounded-3rem cursor-pointer border border-white/5 bg-[#060709] p-6 sm:p-8 hover:border-cyan-500/20 hover:shadow-[0_0_30px_rgba(6,182,212,0.04)] transition-all duration-500 ${item.className}`}
+            className={`group relative flex flex-col wsm:flex-row items-start wsm:items-center justify-between gap-4 wsm:gap-6 overflow-hidden rounded-3rem cursor-pointer border border-white/5 bg-[#060709] p-6 sm:p-8 hover:border-cyan-500/20 hover:shadow-[0_0_30px_rgba(6,182,212,0.04)] transition-all duration-500 ${item.className}`}
             style={{
               borderRadius: '2rem'
             }}
@@ -39,7 +39,7 @@ const BentoGrid = () => {
             </div>
 
             {/* Right side: Glassmorphic Pixel Art Icon wrapper */}
-            <div className="relative z-10 shrink-0 flex items-center justify-center">
+            <div className="relative z-10 shrink-0 flex items-center justify-center self-center wsm:self-auto">
               <BentoPixelArt slug={item.slug} />
             </div>
           </Link>

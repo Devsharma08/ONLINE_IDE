@@ -612,7 +612,7 @@ const FileExplorer = ({
     if (typeof onCreateFile === "function") {
       onCreateFile(newFileName);
     } else {
-      console.log("create new file", newFileName);
+      // console.log("create new file", newFileName);
     }
 
     setFileName(""); // reset file name after creating file

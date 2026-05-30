@@ -243,10 +243,11 @@ const About = () => {
               href="https://github.com/Devsharma08/DSA-LEETCODE"
               target="_blank"
               rel="noopener noreferrer"
-              className="group mt-2 inline-flex items-center justify-center gap-2 border border-white/10 bg-black/40 hover:border-cyan-500/30 hover:text-cyan-400 hover:bg-cyan-950/15 py-3 px-6 text-xs uppercase tracking-widest text-slate-300 font-bold transition-all duration-300 cursor-pointer select-none"
+              className="group mt-2 inline-flex items-center justify-center gap-2 border border-white/10 bg-black/40 hover:border-cyan-500/30 hover:text-cyan-400 hover:bg-cyan-950/15 py-3 px-4 sm:px-6 text-xs uppercase tracking-widest text-slate-300 font-bold transition-all duration-300 cursor-pointer select-none w-full sm:w-auto text-center"
             >
-              <span>[ JOIN_CONTRIBUTION_NETWORK ]</span>
-              <ArrowRight className="w-3.5 h-3.5 transform group-hover:translate-x-1.5 transition-transform duration-300" />
+              <span className="hidden sm:inline">[ JOIN_CONTRIBUTION_NETWORK ]</span>
+              <span className="inline sm:hidden">[ CONTRIBUTE_NOW ]</span>
+              <ArrowRight className="w-3.5 h-3.5 transform group-hover:translate-x-1.5 transition-transform duration-300 shrink-0" />
             </a>
           </div>
         </div>

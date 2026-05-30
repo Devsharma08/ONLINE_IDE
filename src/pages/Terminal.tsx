@@ -80,6 +80,7 @@ const Terminal = () => {
 
    // terminal mode 
    const [selectedMode, setSelectedMode] = useState<"files-mode" | "terminal-mode">("terminal-mode");
+   const [dismissRotationAlert, setDismissRotationAlert] = useState<boolean>(false);
 
    const {
       outputHeight,
@@ -120,7 +121,7 @@ const Terminal = () => {
          setContextCode(content);
          setContextLanguage(language);
       } catch (error) {
-         console.log(error);
+         // console.log(error);
       }
    }
    
@@ -203,7 +204,7 @@ const Terminal = () => {
       );
    }, []);
    
-   console.log("activeFile", activeFile, fileData);
+   // console.log("activeFile", activeFile, fileData);
 
    const handleFileClick = useCallback(async (oid: string, name: string) => {
       setOutput(null);
@@ -404,7 +405,7 @@ const Terminal = () => {
       }
    }, [filesLoading, filesData, queryFile, activeFile, handleFileClick]);
 
-   console.log("filesData", filesData);
+   // console.log("filesData", filesData);
 
    const handleCodeChange = useCallback((nextCode: string) => {
       setCode(nextCode);
@@ -556,6 +557,78 @@ const Terminal = () => {
                </div>
             </div>
          </main>
+
+         {/* ⚠️ FUI Dynamic Portrait Layout Rotation Warning Overlay */}
+         {!dismissRotationAlert && (
+            <div className="portrait-rotate-warning fixed inset-0 z-[9999] hidden flex-col items-center justify-center bg-[#08090a]/90 p-6 text-center font-mono backdrop-blur-md select-none">
+               {/* Styling animations and media queries */}
+               <style dangerouslySetInnerHTML={{__html: `
+                  @keyframes portraitDeviceRotate {
+                     0%, 100% {
+                        transform: rotate(0deg);
+                     }
+                     40%, 60% {
+                        transform: rotate(90deg);
+                     }
+                  }
+                  .animate-portrait-rotate {
+                     animation: portraitDeviceRotate 3.5s ease-in-out infinite;
+                  }
+                  @media (max-width: 767px) and (orientation: portrait) {
+                     .portrait-rotate-warning {
+                        display: flex !important;
+                     }
+                  }
+               `}} />
+
+               {/* Ambient glowing border box */}
+               <div className="relative max-w-sm rounded-none border border-cyan-500/30 bg-[#0c0d10] p-8 shadow-[0_0_50px_rgba(6,182,212,0.15)] flex flex-col items-center text-center">
+                  
+                  {/* Cyber corner L-brackets */}
+                  <div className="absolute top-0 left-0 w-3 h-3 border-t border-l border-cyan-400"></div>
+                  <div className="absolute top-0 right-0 w-3 h-3 border-t border-r border-cyan-400"></div>
+                  <div className="absolute bottom-0 left-0 w-3 h-3 border-b border-l border-cyan-400"></div>
+                  <div className="absolute bottom-0 right-0 w-3 h-3 border-b border-r border-cyan-400"></div>
+
+                  {/* Rotating device visual animation */}
+                  <div className="w-16 h-16 rounded-none bg-cyan-950/15 border border-cyan-500/20 flex items-center justify-center text-cyan-400 mb-6 relative overflow-hidden">
+                     <svg 
+                        className="w-8 h-8 animate-portrait-rotate" 
+                        viewBox="0 0 24 24" 
+                        fill="none" 
+                        stroke="currentColor" 
+                        strokeWidth="1.5" 
+                        strokeLinecap="round" 
+                        strokeLinejoin="round"
+                     >
+                        <rect x="5" y="2" width="14" height="20" rx="2" className="origin-center" />
+                        <path d="M12 18h.01" />
+                     </svg>
+                  </div>
+
+                  {/* Warning headers */}
+                  <span className="text-[10px] text-cyan-400/60 font-bold tracking-[0.25em] mb-2 uppercase select-none">
+                     // SYS // PORTRAIT_LAYOUT_DETECTED
+                  </span>
+                  <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-4 leading-relaxed">
+                     Rotate Device for Landscape Workspace
+                  </h3>
+                  
+                  {/* Details */}
+                  <p className="text-[10px] text-slate-400 leading-relaxed uppercase mb-6 tracking-wide">
+                     The Monaco Editor and telemetry consoles require a horizontal layout to display constraints, codes, and test cases side-by-side. Please rotate your device.
+                  </p>
+
+                  {/* Snappy action button to bypass */}
+                  <button
+                     onClick={() => setDismissRotationAlert(true)}
+                     className="group relative inline-flex items-center justify-center gap-2 border border-cyan-500/35 bg-cyan-950/10 hover:border-cyan-400 hover:text-cyan-400 hover:bg-cyan-950/20 py-2.5 px-5 font-mono text-[10px] font-bold tracking-[0.15em] text-cyan-400 transition-all duration-300 cursor-pointer select-none rounded-none w-full"
+                  >
+                     <span>[ CONTINUE_IN_PORTRAIT ]</span>
+                  </button>
+               </div>
+            </div>
+         )}
       </div>
    );
 

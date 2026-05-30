@@ -183,11 +183,100 @@ export const BraceRcePixelArt: React.FC = () => {
         .animate-fui-text-float {
           animation: fuiTextFloat 5s ease-in-out infinite;
         }
+
+        /* High-fidelity custom media queries for responsive grid scaling without overflow */
+        .pixel-cell {
+          height: 1.6px;
+          width: 1.6px;
+          border-radius: 0.2px;
+        }
+        @media (min-width: 360px) {
+          .pixel-cell {
+            height: 2.2px;
+            width: 2.2px;
+          }
+        }
+        @media (min-width: 440px) {
+          .pixel-cell {
+            height: 3.2px;
+            width: 3.2px;
+          }
+        }
+        @media (min-width: 640px) {
+          .pixel-cell {
+            height: 5.2px;
+            width: 5.2px;
+            border-radius: 0.5px;
+          }
+        }
+        @media (min-width: 768px) {
+          .pixel-cell {
+            height: 6.8px;
+            width: 6.8px;
+          }
+        }
+        @media (min-width: 1024px) {
+          .pixel-cell {
+            height: 8.5px;
+            width: 8.5px;
+          }
+        }
+
+        .pixel-row {
+          display: flex;
+          gap: 0.8px;
+        }
+        @media (min-width: 360px) {
+          .pixel-row {
+            gap: 1px;
+          }
+        }
+        @media (min-width: 440px) {
+          .pixel-row {
+            gap: 1.5px;
+          }
+        }
+        @media (min-width: 640px) {
+          .pixel-row {
+            gap: 2.5px;
+          }
+        }
+        @media (min-width: 768px) {
+          .pixel-row {
+            gap: 3px;
+          }
+        }
+
+        .pixel-grid {
+          display: flex;
+          flex-direction: column;
+          gap: 0.8px;
+        }
+        @media (min-width: 360px) {
+          .pixel-grid {
+            gap: 1px;
+          }
+        }
+        @media (min-width: 440px) {
+          .pixel-grid {
+            gap: 1.5px;
+          }
+        }
+        @media (min-width: 640px) {
+          .pixel-grid {
+            gap: 2.5px;
+          }
+        }
+        @media (min-width: 768px) {
+          .pixel-grid {
+            gap: 3px;
+          }
+        }
       `}} />
 
       {/* Blueprint Grid & Alignment Canvas Wrapper */}
       <div 
-        className="relative w-full overflow-x-auto rounded-2xl border border-white/5 pt-16 pb-12 px-6 sm:pt-20 sm:pb-12 sm:px-12 flex justify-start md:justify-center items-center [&::-webkit-scrollbar]:h-1 [&::-webkit-scrollbar-thumb]:bg-cyan-500/20"
+        className="relative w-full rounded-2xl border border-white/5 pt-16 pb-12 px-4 sm:pt-20 sm:pb-12 sm:px-12 flex justify-center items-center overflow-hidden"
         style={{
           backgroundImage: `
             linear-gradient(to right, rgba(6, 182, 212, 0.03) 1px, transparent 1px),
@@ -201,9 +290,9 @@ export const BraceRcePixelArt: React.FC = () => {
         <div className="absolute inset-0 pointer-events-none rounded-2xl bg-gradient-to-b from-transparent via-cyan-500/[0.01] to-transparent bg-[length:100%_4px] opacity-80" />
 
         {/* Core Pixel Art Matrix Flex block with high-density spacing */}
-        <div className="flex flex-col gap-[2.5px] sm:gap-[3px] min-w-[700px] md:min-w-0 animate-fui-text-float">
+        <div className="pixel-grid animate-fui-text-float">
           {MATRIX_DATA.map((row, rowIndex) => (
-            <div key={`row-${rowIndex}`} className="flex gap-[2.5px] sm:gap-[3px]">
+            <div key={`row-${rowIndex}`} className="pixel-row">
               {row.map((pixel, colIndex) => {
                 const meta = pixelMetadata[rowIndex][colIndex];
                 
@@ -220,9 +309,9 @@ export const BraceRcePixelArt: React.FC = () => {
                           } as React.CSSProperties)
                         : undefined
                     }
-                    className={`h-[4px] w-[4px] sm:h-[6px] sm:w-[6px] md:h-[8px] md:w-[8px] lg:h-[10px] lg:w-[10px] rounded-[0.5px] ${
+                    className={`pixel-cell ${
                       pixel 
-                        ? "animate-pixel-boot border-[0.5px]" 
+                        ? "animate-pixel-boot border-[0.2px] sm:border-[0.5px]" 
                         : "bg-transparent border border-transparent hover:bg-cyan-500/5 hover:border-cyan-500/10 transition-all duration-300"
                     }`}
                   />
@@ -232,6 +321,7 @@ export const BraceRcePixelArt: React.FC = () => {
           ))}
         </div>
       </div>
+
 
       {/* Straightforward Description Subtext - Fades in elegantly after boot-up */}
       <div className="mt-10 flex flex-col items-center text-center max-w-2xl px-4 animate-description-fade opacity-0">

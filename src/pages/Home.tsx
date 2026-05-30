@@ -29,10 +29,11 @@ const Home = () => {
         {/* Right Side: Blinking pixel styled button */}
         <Link 
           to="/terminal" 
-          className="group relative inline-flex items-center justify-center gap-2 border border-cyan-500/35 bg-cyan-950/10 hover:border-cyan-400 hover:text-cyan-400 hover:bg-cyan-950/20 py-4 px-8 font-mono text-xs font-bold tracking-[0.15em] text-cyan-400 transition-all duration-300 cursor-pointer select-none rounded-xl"
+          className="group relative inline-flex items-center justify-center gap-2 border border-cyan-500/35 bg-cyan-950/10 hover:border-cyan-400 hover:text-cyan-400 hover:bg-cyan-950/20 py-4 px-6 sm:px-8 font-mono text-xs font-bold tracking-[0.15em] text-cyan-400 transition-all duration-300 cursor-pointer select-none rounded-xl w-full sm:w-auto text-center"
         >
-          <span>[ JUMP_TO_TERMINAL_WORKSPACE ]</span>
-          <span className="w-2 h-3.5 bg-cyan-400 animate-pulse group-hover:bg-cyan-300"></span>
+          <span className="hidden sm:inline">[ JUMP_TO_TERMINAL_WORKSPACE ]</span>
+          <span className="inline sm:hidden">[ LAUNCH_WORKSPACE ]</span>
+          <span className="w-2 h-3.5 bg-cyan-400 animate-pulse group-hover:bg-cyan-300 shrink-0"></span>
         </Link>
       </div>
     </section>
