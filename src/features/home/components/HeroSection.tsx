@@ -1,39 +1,251 @@
-import { ChevronRight, GitBranch } from "lucide-react";
-import { Link } from "react-router-dom";
+import React from 'react';
 
-const HeroSection = () => {
+// high-fidelity 11x8 letter matrix definitions for smooth curve rendering
+const LETTER_B = [
+  [1, 1, 1, 1, 1, 1, 0, 0],
+  [1, 1, 0, 0, 0, 1, 1, 0],
+  [1, 1, 0, 0, 0, 0, 1, 1],
+  [1, 1, 0, 0, 0, 0, 1, 1],
+  [1, 1, 0, 0, 0, 1, 1, 0],
+  [1, 1, 1, 1, 1, 1, 0, 0],
+  [1, 1, 0, 0, 0, 1, 1, 0],
+  [1, 1, 0, 0, 0, 0, 1, 1],
+  [1, 1, 0, 0, 0, 0, 1, 1],
+  [1, 1, 0, 0, 0, 1, 1, 0],
+  [1, 1, 1, 1, 1, 1, 0, 0]
+];
+
+const LETTER_R = [
+  [1, 1, 1, 1, 1, 1, 0, 0],
+  [1, 1, 0, 0, 0, 1, 1, 0],
+  [1, 1, 0, 0, 0, 0, 1, 1],
+  [1, 1, 0, 0, 0, 0, 1, 1],
+  [1, 1, 0, 0, 0, 1, 1, 0],
+  [1, 1, 1, 1, 1, 1, 0, 0],
+  [1, 1, 0, 0, 1, 1, 0, 0],
+  [1, 1, 0, 0, 0, 1, 1, 0],
+  [1, 1, 0, 0, 0, 0, 1, 1],
+  [1, 1, 0, 0, 0, 0, 1, 1],
+  [1, 1, 0, 0, 0, 0, 0, 1]
+];
+
+const LETTER_A = [
+  [0, 0, 1, 1, 1, 1, 0, 0],
+  [0, 1, 1, 0, 0, 1, 1, 0],
+  [0, 1, 1, 0, 0, 1, 1, 0],
+  [1, 1, 0, 0, 0, 0, 1, 1],
+  [1, 1, 0, 0, 0, 0, 1, 1],
+  [1, 1, 1, 1, 1, 1, 1, 1],
+  [1, 1, 0, 0, 0, 0, 1, 1],
+  [1, 1, 0, 0, 0, 0, 1, 1],
+  [1, 1, 0, 0, 0, 0, 1, 1],
+  [1, 1, 0, 0, 0, 0, 1, 1],
+  [1, 1, 0, 0, 0, 0, 1, 1]
+];
+
+const LETTER_C = [
+  [0, 0, 1, 1, 1, 1, 1, 0],
+  [0, 1, 1, 0, 0, 0, 1, 1],
+  [1, 1, 0, 0, 0, 0, 0, 0],
+  [1, 1, 0, 0, 0, 0, 0, 0],
+  [1, 1, 0, 0, 0, 0, 0, 0],
+  [1, 1, 0, 0, 0, 0, 0, 0],
+  [1, 1, 0, 0, 0, 0, 0, 0],
+  [1, 1, 0, 0, 0, 0, 0, 0],
+  [1, 1, 0, 0, 0, 0, 0, 0],
+  [0, 1, 1, 0, 0, 0, 1, 1],
+  [0, 0, 1, 1, 1, 1, 1, 0]
+];
+
+const LETTER_E = [
+  [1, 1, 1, 1, 1, 1, 1, 1],
+  [1, 1, 0, 0, 0, 0, 0, 0],
+  [1, 1, 0, 0, 0, 0, 0, 0],
+  [1, 1, 0, 0, 0, 0, 0, 0],
+  [1, 1, 1, 1, 1, 1, 0, 0],
+  [1, 1, 1, 1, 1, 1, 0, 0],
+  [1, 1, 0, 0, 0, 0, 0, 0],
+  [1, 1, 0, 0, 0, 0, 0, 0],
+  [1, 1, 0, 0, 0, 0, 0, 0],
+  [1, 1, 0, 0, 0, 0, 0, 0],
+  [1, 1, 1, 1, 1, 1, 1, 1]
+];
+
+// programmatically construct 15-Row x 100-Column high-density binary matrix for BRACE RCE
+const MATRIX_DATA: number[][] = [];
+
+// 2 empty padding rows at top
+MATRIX_DATA.push(new Array(100).fill(0));
+MATRIX_DATA.push(new Array(100).fill(0));
+
+// Generate the 11 character rows
+for (let i = 0; i < 11; i++) {
+  const row = [
+    ...new Array(9).fill(0),        // left pad: 9 cols
+    ...LETTER_B[i], ...[0, 0],      // B (8) + gap (2)
+    ...LETTER_R[i], ...[0, 0],      // R (8) + gap (2)
+    ...LETTER_A[i], ...[0, 0],      // A (8) + gap (2)
+    ...LETTER_C[i], ...[0, 0],      // C (8) + gap (2)
+    ...LETTER_E[i], ...[0, 0, 0, 0, 0, 0], // E (8) + word separator (6)
+    ...LETTER_R[i], ...[0, 0],      // R (8) + gap (2)
+    ...LETTER_C[i], ...[0, 0],      // C (8) + gap (2)
+    ...LETTER_E[i],                 // E (8)
+    ...new Array(9).fill(0)         // right pad: 9 cols
+  ];
+  MATRIX_DATA.push(row);
+}
+
+// 2 empty padding rows at bottom
+MATRIX_DATA.push(new Array(100).fill(0));
+MATRIX_DATA.push(new Array(100).fill(0));
+
+export const BraceRcePixelArt: React.FC = () => {
+  // Pre-calculate rendering targets once for stability, performance, and hydration matching
+  const pixelMetadata = React.useMemo(() => {
+    return MATRIX_DATA.map((row, rowIndex) => {
+      return row.map((pixel, colIndex) => {
+        if (!pixel) return null;
+        
+        // Smooth horizontal gradient from Cyber Cyan rgb(34, 211, 238) to Retro Amber rgb(245, 158, 11)
+        const ratio = colIndex / 99;
+        const r = Math.round(34 + (245 - 34) * ratio);
+        const g = Math.round(211 + (158 - 211) * ratio);
+        const b = Math.round(238 + (11 - 238) * ratio);
+        
+        const targetColor = `rgb(${r}, ${g}, ${b})`;
+        const targetShadow = `0 0 12px rgba(${r}, ${g}, ${b}, 0.6)`;
+        
+        // Snappy randomized entry delay across the grid (0 to 800ms max)
+        const delay = Math.floor(Math.random() * 800);
+        
+        return {
+          targetColor,
+          targetShadow,
+          delay
+        };
+      });
+    });
+  }, []);
+
   return (
-    <div className="z-10 flex min-h-[72vh] w-full max-w-4xl flex-col items-center justify-center pb-16 text-center sm:min-h-[80vh] sm:pb-20 font-mono">
-      <div className="inline-flex items-center gap-2 px-3 py-1 rounded-none border border-cyan-500/20 bg-cyan-950/5 text-xs text-cyan-400 uppercase tracking-wider mb-8">
-        <span className="flex h-1.5 w-1.5 rounded-full bg-cyan-500 animate-ping"></span>
-        SYS // LIVE_DSA_RUNTIME_SOLUTIONS
+    <div className="z-10 flex min-h-[65vh] w-full max-w-7xl flex-col items-center justify-center pb-8 font-mono text-slate-200 select-none px-4 sm:px-8">
+      
+      {/* Inject snappy keyframe transitions and descriptive text fade-in */}
+      <style dangerouslySetInnerHTML={{__html: `
+        @keyframes bootPixel {
+          0% {
+            opacity: 0;
+            transform: scale(0.3);
+            background-color: var(--target-color);
+            border-color: rgba(255, 255, 255, 0.05);
+            box-shadow: none;
+          }
+          50% {
+            opacity: 0.6;
+            transform: scale(1.1);
+            background-color: var(--target-color);
+            border-color: rgba(255, 255, 255, 0.15);
+            box-shadow: 0 0 8px var(--target-color);
+          }
+          100% {
+            opacity: 1;
+            transform: scale(1);
+            background-color: var(--target-color);
+            border-color: rgba(255, 255, 255, 0.15);
+            box-shadow: var(--target-shadow);
+          }
+        }
+        .animate-pixel-boot {
+          animation: bootPixel 0.75s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        @keyframes fadeInDescription {
+          0% {
+            opacity: 0;
+            transform: translateY(12px);
+          }
+          100% {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        .animate-description-fade {
+          animation: fadeInDescription 1s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+          animation-delay: 1s;
+        }
+        @keyframes fuiTextFloat {
+          0%, 100% {
+            transform: translateY(0px);
+          }
+          50% {
+            transform: translateY(-5px);
+          }
+        }
+        .animate-fui-text-float {
+          animation: fuiTextFloat 5s ease-in-out infinite;
+        }
+      `}} />
+
+      {/* Blueprint Grid & Alignment Canvas Wrapper */}
+      <div 
+        className="relative w-full overflow-x-auto rounded-2xl border border-white/5 pt-16 pb-12 px-6 sm:pt-20 sm:pb-12 sm:px-12 flex justify-start md:justify-center items-center [&::-webkit-scrollbar]:h-1 [&::-webkit-scrollbar-thumb]:bg-cyan-500/20"
+        style={{
+          backgroundImage: `
+            linear-gradient(to right, rgba(6, 182, 212, 0.03) 1px, transparent 1px),
+            linear-gradient(to bottom, rgba(6, 182, 212, 0.03) 1px, transparent 1px)
+          `,
+          backgroundSize: '20px 20px',
+          backgroundColor: '#02040a'
+        }}
+      >
+        {/* Scanline CRT overlay filter effect */}
+        <div className="absolute inset-0 pointer-events-none rounded-2xl bg-gradient-to-b from-transparent via-cyan-500/[0.01] to-transparent bg-[length:100%_4px] opacity-80" />
+
+        {/* Core Pixel Art Matrix Flex block with high-density spacing */}
+        <div className="flex flex-col gap-[2.5px] sm:gap-[3px] min-w-[700px] md:min-w-0 animate-fui-text-float">
+          {MATRIX_DATA.map((row, rowIndex) => (
+            <div key={`row-${rowIndex}`} className="flex gap-[2.5px] sm:gap-[3px]">
+              {row.map((pixel, colIndex) => {
+                const meta = pixelMetadata[rowIndex][colIndex];
+                
+                return (
+                  <div
+                    key={`pixel-${rowIndex}-${colIndex}`}
+                    style={
+                      pixel && meta
+                        ? ({
+                            '--target-color': meta.targetColor,
+                            '--target-shadow': meta.targetShadow,
+                            animationDelay: `${meta.delay}ms`,
+                            opacity: 0
+                          } as React.CSSProperties)
+                        : undefined
+                    }
+                    className={`h-[4px] w-[4px] sm:h-[6px] sm:w-[6px] md:h-[8px] md:w-[8px] lg:h-[10px] lg:w-[10px] rounded-[0.5px] ${
+                      pixel 
+                        ? "animate-pixel-boot border-[0.5px]" 
+                        : "bg-transparent border border-transparent hover:bg-cyan-500/5 hover:border-cyan-500/10 transition-all duration-300"
+                    }`}
+                  />
+                );
+              })}
+            </div>
+          ))}
+        </div>
       </div>
 
-      <h1 className="mb-6 bg-gradient-to-r from-white via-slate-300 to-slate-500 bg-clip-text text-3xl font-extrabold tracking-tight text-transparent drop-shadow-sm sm:text-5xl md:text-6xl uppercase">
-        MASTER_ALGORITHMS <br />
-        <span className="bg-clip-text bg-gradient-to-r from-cyan-400 to-teal-400">ONE_FILE_AT_A_TIME</span>
-      </h1>
-
-      <p className="mb-10 max-w-2xl text-xs leading-relaxed text-slate-400 sm:text-sm uppercase tracking-wide">
-        Explore a carefully curated collection of Data Structures and Algorithms solutions. Browse the monospaced file tree, analyze structural complexity, and run compilations inside sandboxed system runtimes.
-      </p>
-
-      <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
-        <Link
-          to="/terminal"
-          className="group relative px-6 py-2.5 border border-cyan-500/30 bg-cyan-950/10 hover:border-cyan-400 hover:bg-cyan-950/20 text-cyan-400 font-bold transition-all duration-300 flex items-center justify-center gap-2"
-        >
-          <span>[ BROWSE_WORKSPACE ]</span>
-          <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
-        </Link>
-
-        <button className="px-6 py-2.5 border border-white/5 bg-black/40 hover:border-white/10 text-slate-400 hover:text-slate-200 font-bold transition-all duration-300 flex items-center justify-center gap-2 cursor-pointer">
-          <GitBranch className="w-3.5 h-3.5 text-slate-500" />
-          <span>[ VIEW_SOURCE ]</span>
-        </button>
+      {/* Straightforward Description Subtext - Fades in elegantly after boot-up */}
+      <div className="mt-10 flex flex-col items-center text-center max-w-2xl px-4 animate-description-fade opacity-0">
+        <h2 className="text-xs sm:text-sm font-bold tracking-[0.35em] text-cyan-400/90 uppercase mb-3.5 select-none flex flex-wrap items-center justify-center gap-2">
+          <span>// CRX // REMOTE_CODE_EXECUTION_IDE</span>
+          <span className="px-1.5 py-0.5 border border-cyan-500/25 text-[9px] font-bold tracking-wider rounded-none uppercase text-amber-500 bg-cyan-950/15 select-none">[ v1.0.0 ]</span>
+        </h2>
+        <p className="text-xs sm:text-sm text-slate-400 font-medium tracking-[0.05em] leading-relaxed max-w-xl">
+          A high-performance sandboxed playground to run, compile, and solve Data Structures and Algorithms challenges live with high-precision execution telemetry.
+        </p>
       </div>
+
     </div>
   );
 };
 
-export default HeroSection;
+export default BraceRcePixelArt;
