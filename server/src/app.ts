@@ -32,6 +32,7 @@ const securityHeaders = (_req: Request, res: Response, next: NextFunction) => {
 
 export const createApp = (): Express => {
   const app = express();
+  app.set("trust proxy", 1); // Trust first proxy (Nginx) for secure header validation
   const allowedOrigins = getAllowedOrigins();
 
   app.disable("x-powered-by"); // Hide Express signature profiling headers
