@@ -23,9 +23,12 @@ const checkDiffuclty = (name: string, arr: string[]): string => {
 export const getFileNames = async (_req: Request, res: Response) => {
   try {
     const cached = internalCache.get(CACHE_KEYS.fileNames);
-    if (cached) {
+    if (Array.isArray(cached) && cached.every((item) => item?.language && item?.difficulty_level)) {
       res.set("Cache-Control", "public,max-age=600");
       return res.status(200).json(cached);
+    }
+    if (cached) {
+      internalCache.del(CACHE_KEYS.fileNames);
     }
 
     const rawData = await postGraphQL<GitHubFileNamesResponse>({

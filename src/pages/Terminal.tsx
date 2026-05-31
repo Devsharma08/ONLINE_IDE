@@ -1,5 +1,7 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 import { useState, useEffect, useCallback, useContext, useRef } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
+import { House } from "lucide-react";
 import { FileNamesContext, type FileEntry } from "../context/fileNamesContext";
 import { CodeContext } from "../context/codeContext";
 import { UserResponseContext } from "../context/responseContent";
@@ -16,11 +18,9 @@ import {
    formatExecutionOutput,
 } from "../features/terminal/executionOutput";
 import { useTerminalLayout } from "../features/terminal/hooks/useTerminalLayout";
-import type { ExecutionMode, ExecutionResult, FileContentResponse, ProblemTestCase, SupportedLanguage } from "../features/terminal/types";
-import { usePreventTabClose } from '../utils/terminalUtils/HandleWindowClose'
+import type { ExecutionMode, FileContentResponse, SupportedLanguage } from "../features/terminal/types";
 const LOCAL_FILE_ID_PREFIX = "local-";
 const LOCAL_FILE_STORAGE_PREFIX = "localFile:";
-const NEW_TEMP_LOCAL_STORAGE_KEY = "newLocalFileContent#";
 
 const getLocalStorageKey = (oid: string) => `${LOCAL_FILE_STORAGE_PREFIX}${oid}`;
 const isLocalFile = (oid: string | null): boolean => Boolean(oid && oid.startsWith(LOCAL_FILE_ID_PREFIX));
@@ -38,44 +38,44 @@ const readLocalFile = (oid: string) => {
 };
 
 const Terminal = () => {
-   const [searchParams] = useSearchParams();
+   const [searchParams, setSearchParams] = useSearchParams();
    const queryFile = searchParams.get("file");
-   const [code, setCode] = useState<string>("");
-   const [language, setLanguage] = useState<SupportedLanguage>("");
    const [loading, setLoading] = useState<boolean>(false);
    const [filesLoading, setFilesLoading] = useState<boolean>(true);
-   const [activeFile, setActiveFile] = useState<string | null>(null);
    const [isExecuting, setIsExecuting] = useState(false);
    const [executingMode, setExecutingMode] = useState<ExecutionMode | null>(null);
    const [outputText, setOutputText] = useState<string>("");
-   const [outputStatus, setOutputStatus] = useState<"RUNTIME_ERROR" | "SUCCESS" | "ERROR" | "LOADING" | "TIMEOUT" | null>(null);
-   const [output, setOutput] = useState<ExecutionResult | null>(null);
    const [resLoading, setResponseLoading] = useState<boolean>(false);
-   const [customInput, setCustomInput] = useState<string>("");
-   const [customInputActive, setCustomInputActive] = useState<boolean>(false);
    const [isCustomInputRun, setIsCustomInputRun] = useState<boolean>(false);
-
+   const [selectedFileName, setSelectedFileName] = useState<string>("");
    
-   // local file content
-   const [checkFileExists, setCheckFileExists] = useState<boolean>(false);
+   // context states
+   const {
+      filesData,
+      setFilesData
+   } = useContext(FileNamesContext);
    
-   usePreventTabClose(true);
-   useEffect(() => {
-      if (!activeFile) {
-         setCheckFileExists(false);
-         return;
-      }
-      const key = getLocalStorageKey(activeFile); 
-      const exists = isLocalFile(key) ? Boolean(readLocalFile(activeFile)) : true;
-      setCheckFileExists(exists);
-   },[activeFile]);
-   
+   const {
+      code,
+      setCode,
+      language,
+      setLanguage,
+      testCases,
+      setTestCases,
+      activeFile,
+      setActiveFile,
+      output,
+      setOutput,
+      customInput,
+      setCustomInput,
+      customInputActive,
+      setCustomInputActive,
+   } = useContext(CodeContext);
 
    // selection b/w output or test cases
    const [isOutputActive, setIsOutputActive] = useState<boolean>(true);
 
-   // testcases
-   const [testCases, setTestCases] = useState<ProblemTestCase[]>([]);
+   // problem definition data
    const [fileData, setFileData] = useState<FileContentResponse | null>(null);
 
    // terminal mode 
@@ -91,49 +91,14 @@ const Terminal = () => {
       setSidebarWidth,
    } = useTerminalLayout();
 
-   // context states
-   const {
-      filesData,
-      setFilesData
-   } = useContext(FileNamesContext);
-   
    const { setStatus } = useContext(UserResponseContext);
-   const {
-      setCode: setContextCode,
-      setLanguage: setContextLanguage,
-      setTestCases: setContextTestCases,
-      setActiveFile: setContextActiveFile,
-      setOutput: setContextOutput,
-      setCustomInput: setContextCustomInput,
-      setCustomInputActive: setContextCustomInputActive,
-   } = useContext(CodeContext);
    
-   const executeCache = useRef<Map<string, ExecutionResult>>(new Map());
    const formatEditorRef = useRef<(() => void) | null>(null);
+   const fileLoadRequestRef = useRef(0);
+   const pendingFileParamRef = useRef<string | null>(null);
 
    // filter files accoring to difficulty level
    const [difficultyFilter, setDifficultyFilter] = useState<"ALL" | "EASY" | "MEDIUM" | "HARD">("ALL");
-
-   const fetchFileCode = async (oid: string) => {
-      try {
-         const response = await fetchFileContent(oid);
-         const { content, language } = response.data;
-         setContextCode(content);
-         setContextLanguage(language);
-      } catch (error) {
-         // console.log(error);
-      }
-   }
-   
-   // move to previous file state 
-   const checkIfFileIdInLocalStorage = useCallback((oid: string | null): boolean => {
-      if (!oid) return false;
-      if(oid.startsWith(LOCAL_FILE_ID_PREFIX)) {
-         const localFile = readLocalFile(oid);
-         return Boolean(localFile);
-      }
-      return false;
-   },[]);
 
     const handleResetCode = useCallback(async () => {
        if (!activeFile) return;
@@ -153,38 +118,20 @@ const Terminal = () => {
              );
           }
           setCode("");
-          setContextCode("");
        } else {
           // Seed/Repository file - Re-fetch clean template from backend
           setLoading(true);
           try {
-             const fileContent = await fetchFileContent(activeFile);
+             const fileContent = await fetchFileContent(activeFile, selectedFileName || undefined);
              const nextCode = fileContent.content || "";
              setCode(nextCode);
-             setContextCode(nextCode);
           } catch (error) {
              console.error("Failed to reset template:", error);
           } finally {
              setLoading(false);
           }
        }
-    }, [activeFile, setContextCode]);
-
-
-   const createFileInLocalStorage = useCallback((name: string, language: SupportedLanguage): string => {
-      if(checkIfFileIdInLocalStorage(activeFile)) {
-         const oid = `${LOCAL_FILE_ID_PREFIX}${crypto.randomUUID?.() ?? Date.now().toString()}`;
-         const localFile = {
-            name,
-            content: "",
-            language,
-            createdAt: Date.now(),
-            updatedAt: Date.now(),
-         };
-         localStorage.setItem(getLocalStorageKey(oid), JSON.stringify(localFile));
-         return oid;
-      }
-   },[activeFile,checkIfFileIdInLocalStorage])
+    }, [activeFile, selectedFileName, setCode]);
    
 
    const handleFormatCode = useCallback(() => {
@@ -206,117 +153,113 @@ const Terminal = () => {
    
    // console.log("activeFile", activeFile, fileData);
 
-   const handleFileClick = useCallback(async (oid: string, name: string) => {
-      setOutput(null);
-      setOutputText("");
-      setOutputStatus('LOADING');
-      setContextOutput(null);
-      setActiveFile(oid);
-      setLoading(!isLocalFile(oid));
+     const handleFileClick = useCallback(async (oid: string, name: string) => {
+        const requestId = fileLoadRequestRef.current + 1;
+        fileLoadRequestRef.current = requestId;
+        pendingFileParamRef.current = name;
 
-      if (isLocalFile(oid)) {
-         const localFile = readLocalFile(oid);
-         const nextLanguage = localFile?.language ?? detectLanguageFromFileName(name);
-         const nextCode = localFile?.content ?? "";
+        setSearchParams((prev) => {
+           const next = new URLSearchParams(prev);
+           next.set("file", name);
+           return next;
+        });
 
-         setFileData({
-            content: nextCode,
-            test_cases: [],
-            id: oid,
-            problem_definition: "",
-            difficulty_level: "",
-         });
-         setTestCases([]);
-         setLanguage(nextLanguage);
-         setCode(nextCode);
-         setContextCode(nextCode);
-         setContextLanguage(nextLanguage);
-         setContextTestCases([]);
-         setContextActiveFile(oid);
-         setCustomInput("");
-         setContextCustomInput("");
-         setCustomInputActive(false);
-         setContextCustomInputActive(false);
-         setIsCustomInputRun(false);
-         setLoading(false);
-         return;
-      }
+        setOutput(null);
+        setOutputText("");
+        setActiveFile(oid);
+        setSelectedFileName(name);
+        setLoading(!isLocalFile(oid));
 
-      try {
-         const fileContent = await fetchFileContent(oid);
-         const nextTestCases = buildProblemTestCases(fileContent);
-         const nextLanguage = detectLanguageFromFileName(name);
-         const nextCode = fileContent.content || "";
+        // Immediately clear problem details to prevent stale layout leakage from previous files
+        setFileData(null);
+        setTestCases([]);
+        setCode("");
 
-         setFileData(fileContent);
-         setTestCases(nextTestCases);
-         setLanguage(nextLanguage);
-         setCode(nextCode);
-         setContextCode(nextCode);
-         setContextLanguage(nextLanguage);
-         setContextTestCases(nextTestCases);
-         setContextActiveFile(oid);
-         setCustomInput("");
-         setContextCustomInput("");
-         setCustomInputActive(false);
-         setContextCustomInputActive(false);
-         setIsCustomInputRun(false);
-      } catch {
-         setFileData(null);
-         setCode("error some thing wen't wrong");
-         setStatus("ERROR");
-      }
-      finally {
-         setLoading(false);
-      }
-   }, [setContextActiveFile, setContextCode, setContextCustomInput, setContextCustomInputActive, setContextLanguage, setContextOutput, setContextTestCases, setIsCustomInputRun, setStatus]);
+        if (isLocalFile(oid)) {
+           const localFile = readLocalFile(oid);
+           const nextLanguage = localFile?.language ?? detectLanguageFromFileName(name);
+           const nextCode = localFile?.content ?? "";
+
+           setFileData({
+              content: nextCode,
+              test_cases: [],
+              id: oid,
+              problem_definition: "",
+              difficulty_level: "",
+           });
+           setTestCases([]);
+           setLanguage(nextLanguage);
+           setCode(nextCode);
+           setCustomInput("");
+           setCustomInputActive(false);
+           setIsCustomInputRun(false);
+           setLoading(false);
+           return;
+        }
+
+        try {
+           const fileContent = await fetchFileContent(oid, name);
+           if (fileLoadRequestRef.current !== requestId) {
+              return;
+           }
+           const nextTestCases = buildProblemTestCases(fileContent);
+           const nextLanguage = detectLanguageFromFileName(name);
+           const nextCode = fileContent.content || "";
+
+           setFileData(fileContent);
+           setTestCases(nextTestCases);
+           setLanguage(nextLanguage);
+           setCode(nextCode);
+           setCustomInput("");
+           setCustomInputActive(false);
+           setIsCustomInputRun(false);
+        } catch {
+           if (fileLoadRequestRef.current !== requestId) {
+              return;
+           }
+           setFileData(null);
+           setCode("error some thing wen't wrong");
+           setStatus("ERROR");
+        }
+        finally {
+           if (fileLoadRequestRef.current === requestId) {
+              setLoading(false);
+           }
+        }
+     }, [setSearchParams, setOutput, setActiveFile, setFileData, setTestCases, setCode, setLanguage, setCustomInput, setCustomInputActive, setIsCustomInputRun, setStatus]);
 
 
    // function to run the code 
-   const handleRunCode = useCallback(async (nextCode: string, nextLanguage: SupportedLanguage, oid: string, mode: ExecutionMode = "RUN") => {
-      const customInputValue = customInputActive ? customInput.trim() : "";
-      const isCustomExecution = customInputValue.length > 0;
-      setIsCustomInputRun(isCustomExecution);
-      const cacheKey = `${oid}-${nextLanguage}-${mode}-${nextCode}-${customInputValue}`;
-      const cached = executeCache.current.get(cacheKey);
-      if (cached) {
-         setOutput(cached);
-         setContextOutput(cached);
-         setStatus("SUCCESS");
-         setOutputText(formatExecutionOutput(cached, mode));
-         setOutputStatus(cached.status === "success" ? "SUCCESS" : cached.status === "runtime_error" ? "RUNTIME_ERROR" : "ERROR");
-         return;
-      }
+    const handleRunCode = useCallback(async (nextCode: string, nextLanguage: SupportedLanguage, oid: string, mode: ExecutionMode = "RUN") => {
+       const customInputValue = customInputActive ? customInput.trim() : "";
+       const isCustomExecution = customInputValue.length > 0;
+       setIsCustomInputRun(isCustomExecution);
 
-      setResponseLoading(true);
-      setIsExecuting(true);
-      setExecutingMode(mode);
-      setStatus("LOADING");
-      setOutputStatus("LOADING");
+       setResponseLoading(true);
+       setIsExecuting(true);
+       setExecutingMode(mode);
+       setStatus("LOADING");
 
-      try {
-         const data = await executeCode({ code: nextCode, language: nextLanguage, oid, mode, customInput: customInputValue });
-         executeCache.current.set(cacheKey, data);
-         setOutput(data);
-         setContextOutput(data);
-         setStatus("SUCCESS");
-         setOutputText(formatExecutionOutput(data, mode));
-      } catch (error) {
-         const message = error instanceof Error ? error.message : "something went wrong";
-         setOutputText(`ERROR: ${message}`);
-         setOutput(null);
-         setStatus("ERROR");
-      } finally {
-         setIsExecuting(false);
-         setExecutingMode(null);
-         setResponseLoading(false);
-         setCustomInput("");
-         setContextCustomInput("");
-         if (!isCustomExecution) {
-            setIsCustomInputRun(false);
-         }
-      }
-   }, [customInput, customInputActive, setContextOutput, setContextCustomInput, setIsCustomInputRun, setStatus]);
+       try {
+          const data = await executeCode({ code: nextCode, language: nextLanguage, oid, mode, customInput: customInputValue, fileName: selectedFileName || undefined });
+          setOutput(data);
+          setStatus("SUCCESS");
+          setOutputText(formatExecutionOutput(data, mode));
+       } catch (error) {
+          const message = error instanceof Error ? error.message : "something went wrong";
+          setOutputText(`ERROR: ${message}`);
+          setOutput(null);
+          setStatus("ERROR");
+       } finally {
+          setIsExecuting(false);
+          setExecutingMode(null);
+          setResponseLoading(false);
+          setCustomInput("");
+          if (!isCustomExecution) {
+             setIsCustomInputRun(false);
+          }
+       }
+    }, [customInput, customInputActive, selectedFileName, setOutput, setCustomInput, setIsCustomInputRun, setStatus]);
 
    // console.log("fileData", fileNamesData);
 
@@ -345,22 +288,21 @@ const Terminal = () => {
       return localFiles;
    }, []);
 
-   useEffect(() => {      
-      if (activeFile && isLocalFile(activeFile)) {
-         const localFile = readLocalFile(activeFile);
-         if (localFile) {
-            localStorage.setItem(getLocalStorageKey(activeFile), JSON.stringify({
-               ...localFile,
-               content: code,
-               updatedAt: Date.now(),
-            }));
-         }
-      }
-   }, [code]);
+    useEffect(() => {
+       // Clear persistent context and local state on mount to prevent leakage from previous problems
+       setCode("");
+       setActiveFile("");
+       setSelectedFileName("");
+       setTestCases([]);
+       setOutput(null);
+       setOutputText("");
+       setCustomInput("");
+       setCustomInputActive(false);
+       setIsCustomInputRun(false);
+    }, [setCode, setActiveFile, setTestCases, setOutput, setCustomInput, setCustomInputActive]);
 
    useEffect(() => {
       let cancelled = false;
-      setOutputStatus(null);
 
       const loadFileNames = async () => {
          await Promise.resolve();
@@ -395,22 +337,29 @@ const Terminal = () => {
    }, [loadLocalFiles, setFilesData, setStatus]);
 
    useEffect(() => {
+      if (pendingFileParamRef.current && pendingFileParamRef.current !== queryFile) {
+         return;
+      }
+
+      if (pendingFileParamRef.current === queryFile) {
+         pendingFileParamRef.current = null;
+      }
+
       if (!filesLoading && filesData.length > 0 && queryFile) {
          const matched = filesData.find(
             (file) => file.name.toLowerCase() === queryFile.toLowerCase() || file.oid === queryFile
          );
-         if (matched && activeFile !== matched.oid) {
+         if (matched && (activeFile !== matched.oid || selectedFileName !== matched.name)) {
             void handleFileClick(matched.oid, matched.name);
          }
       }
-   }, [filesLoading, filesData, queryFile, activeFile, handleFileClick]);
+   }, [filesLoading, filesData, queryFile, activeFile, selectedFileName, handleFileClick]);
 
    // console.log("filesData", filesData);
 
-   const handleCodeChange = useCallback((nextCode: string) => {
-      setCode(nextCode);
-      setContextCode(nextCode);
-   }, [setContextCode]);
+    const handleCodeChange = useCallback((nextCode: string) => {
+       setCode(nextCode);
+    }, [setCode]);
 
    useEffect(() => {
       if (!activeFile || !isLocalFile(activeFile)) {
@@ -424,7 +373,11 @@ const Terminal = () => {
       return () => window.clearTimeout(timeoutId);
    }, [activeFile, code, saveLocalFileContent]);
 
-   const activeFileName = filesData.find((file) => file.oid === activeFile)?.name || "Editor";
+   const activeFileEntry =
+      filesData.find((file) => file.oid === activeFile && file.name === selectedFileName) ??
+      filesData.find((file) => file.oid === activeFile);
+   const activeFileName = selectedFileName || activeFileEntry?.name || "Editor";
+   const activeFileKey = activeFile ? `${activeFile}:${activeFileName}` : "";
 
    const handleCreateLocalFile = (name: string) => {
       const normalizedName = name.trim();
@@ -449,7 +402,14 @@ const Terminal = () => {
          },
       ]);
 
+      setSearchParams((prev) => {
+         const next = new URLSearchParams(prev);
+         next.set("file", normalizedName);
+         return next;
+      });
+
       setActiveFile(oid);
+      setSelectedFileName(normalizedName);
       setFileData({
          content: "",
          test_cases: [],
@@ -460,21 +420,56 @@ const Terminal = () => {
       setTestCases([]);
       setLanguage(languageFromName);
       setCode("");
-      setContextCode("");
-      setContextLanguage(languageFromName);
-      setContextTestCases([]);
-      setContextActiveFile(oid);
       setCustomInput("");
-      setContextCustomInput("");
       setCustomInputActive(false);
-      setContextCustomInputActive(false);
       setIsCustomInputRun(false);
    };
+
+   const handleDeleteLocalFile = useCallback((oid: string) => {
+      if (!oid) return;
+
+      localStorage.removeItem(getLocalStorageKey(oid));
+      setFilesData(filesData.filter((file) => file.oid !== oid));
+
+      if (activeFile !== oid) {
+         return;
+      }
+
+      setActiveFile("");
+      setSelectedFileName("");
+      setFileData(null);
+      setTestCases([]);
+      setLanguage("javascript");
+      setCode("");
+      setOutput(null);
+      setOutputText("");
+      setCustomInput("");
+      setCustomInputActive(false);
+      setIsCustomInputRun(false);
+      setSearchParams((prev) => {
+         const next = new URLSearchParams(prev);
+         next.delete("file");
+         return next;
+      });
+   }, [
+      activeFile,
+      filesData,
+      setActiveFile,
+      setCode,
+      setCustomInput,
+      setCustomInputActive,
+      setFilesData,
+      setLanguage,
+      setOutput,
+      setSearchParams,
+      setTestCases,
+   ]);
 
    return (
       <div className='flex h-[100dvh] min-h-screen flex-col overflow-hidden bg-[#08090a] fui-grid-bg text-white md:flex-row'>
          <FileExplorer
             activeFile={activeFile}
+            activeFileName={activeFileName}
             files={filesData}
             difficultyFilter={difficultyFilter}
             setDifficultyFilter={setDifficultyFilter}
@@ -485,6 +480,7 @@ const Terminal = () => {
             onResizeStart={startSidebarDragging}
             sidebarWidth={sidebarWidth}
             onCreateFile={handleCreateLocalFile}
+            onDeleteLocalFile={handleDeleteLocalFile}
             isLoadingFiles={filesLoading}
             selectedMode={selectedMode}
             setSelectedMode={setSelectedMode}
@@ -492,7 +488,17 @@ const Terminal = () => {
 
          <main className='flex min-h-0 min-w-0 flex-1 flex-col bg-black/40'>
             <div className="flex w-full items-center justify-between gap-3 border-b border-white/5 bg-[#0b0c0e] px-3 py-2 text-xs font-mono text-cyan-400/80 sm:px-4">
-               <span>SYS // TERMINAL_WORKSPACE</span>
+               <div className="flex min-w-0 items-center gap-2">
+                  <Link
+                     to="/"
+                     title="Go to home"
+                     className="inline-flex h-7 shrink-0 items-center justify-center gap-1.5 rounded-none border border-cyan-500/25 bg-cyan-950/10 px-2 text-[10px] font-bold uppercase tracking-wider text-cyan-400 transition-all duration-150 hover:border-cyan-400 hover:bg-cyan-950/20 active:scale-95"
+                  >
+                     <House className="h-3.5 w-3.5" />
+                     <span className="hidden sm:inline">[ HOME ]</span>
+                  </Link>
+                  <span className="truncate">SYS // TERMINAL_WORKSPACE</span>
+               </div>
                <span className="truncate text-slate-500 uppercase">{filesLoading ? "SYNCING..." : activeFileName}</span>
             </div>
 
@@ -526,6 +532,7 @@ const Terminal = () => {
                                  code={code}
                                  
                                  oid={activeFile}
+                                 fileKey={activeFileKey}
                                  onCodeChange={handleCodeChange}
                                  onFormatMount={(formatAction) => {
                                     formatEditorRef.current = formatAction;

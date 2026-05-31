@@ -1,4 +1,4 @@
-import { Loader2, Check, X, AlertTriangle, Clock } from "lucide-react";
+import { Loader2, Check, X, AlertTriangle, Info } from "lucide-react";
 import type { ExecutionResult, ProblemTestCase } from "../types";
 import type { MouseEvent } from "react";
 import { Maximize2 } from 'lucide-react';
@@ -51,7 +51,8 @@ const OutputPanel = ({
   };
 
   const hasError = output?.details?.some((detail) => detail.runtimeError);
-  const allPassed = output?.status === "PASSED" || (output?.passedCases === output?.totalCases && output?.totalCases > 0);
+  const totalCases = output?.totalCases ?? 0;
+  const allPassed = output?.status === "PASSED" || (output?.passedCases === totalCases && totalCases > 0);
 
   // Compute aggregate metrics
   const successfulDetails = output?.details?.filter(d => d.metrics) || [];
@@ -258,6 +259,15 @@ const OutputPanel = ({
                 <div className="text-[10px] font-mono font-bold uppercase tracking-wider text-rose-400 mb-3 flex items-center gap-1.5">
                   <AlertTriangle className="w-4 h-4 text-rose-400" />
                   MISMATCHED_OUTPUT // DIAGNOSTICS [ CASE {output.details.findIndex(d => !d.passed) + 1} ]
+                </div>
+
+                {/* Custom Verification Warning Banner */}
+                <div className="rounded-none border border-cyan-500/20 bg-cyan-950/5 p-3 flex items-start gap-2.5 font-mono text-[11px] text-cyan-400 leading-normal border-l-2 border-l-cyan-400 mb-3 shadow-[0_0_15px_rgba(6,182,212,0.02)]">
+                  <Info className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5 animate-pulse" />
+                  <div>
+                    <span className="font-bold uppercase tracking-wider block mb-0.5">INFO // VERIFICATION_ASSISTANCE</span>
+                    If your solution output does not match due to strict spacing, array order, or expected format mismatches, you can verify your algorithm's logic directly using the <span className="text-white font-bold select-none cursor-pointer uppercase underline hover:text-cyan-300 transition-colors" onClick={() => setCustomInputActive(true)}>[ CUSTOM INPUT ]</span> playground above.
+                  </div>
                 </div>
 
                 {/* Grid Comparison */}

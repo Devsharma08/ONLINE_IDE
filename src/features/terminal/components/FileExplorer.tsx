@@ -1,11 +1,13 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 import { useSearchParams } from "react-router-dom";
-import { FileCode, FilePenIcon as CreateFileIcon, Loader2, X } from "lucide-react";
+import { FileCode, Loader2, X } from "lucide-react";
 import React,{ useEffect, useMemo, useState, type CSSProperties, type KeyboardEvent, type MouseEvent, type ChangeEvent, useCallback } from "react";
 import type { FileEntry } from "../../../context/fileNamesContext";
 import type { FileContentResponse } from "../types";
 
 type FileExplorerProps = {
   activeFile: string | null;
+  activeFileName: string;
   files: FileEntry[];
   fileData: FileContentResponse | null;
   language: string;
@@ -16,6 +18,7 @@ type FileExplorerProps = {
   onFileClick: (oid: string, name: string) => void;
   onResizeStart: (event: MouseEvent<HTMLDivElement>) => void;
   onCreateFile?: (name: string) => void;
+  onDeleteLocalFile: (oid: string) => void;
   isLoadingFiles: boolean;
   selectedMode: "files-mode" | "terminal-mode";
   setSelectedMode: (mode: "files-mode" | "terminal-mode") => void;
@@ -36,6 +39,7 @@ type SidebarFilesModeProps = {
   language: string;
   testCaseCount: number;
   activeFile: string | null;
+  activeFileName: string;
   onFileClick: (oid: string, name: string) => void;
   isLoadingFiles: boolean;
   filteredFiles: FileEntry[];
@@ -60,6 +64,7 @@ const SidebarFilesMode = React.memo(({
   language,
   testCaseCount,
   activeFile,
+  activeFileName,
   onFileClick,
   isLoadingFiles,
   filteredFiles,
@@ -177,11 +182,11 @@ const SidebarFilesMode = React.memo(({
                 {filteredFiles.length > 0 ? (
                   filteredFiles.map((file) => (
                     <button
-                      key={file.oid || file.name}
+                      key={`${file.oid}:${file.name}`}
                       type="button"
                       onClick={() => onFileClick(file.oid, file.name)}
                       className={`group file-button-compact flex w-full items-center justify-between gap-3 rounded-none border px-3 py-2 text-left text-xs font-mono transition-all border-l-2 cursor-pointer ${
-                        activeFile === file.oid
+                        activeFile === file.oid && activeFileName === file.name
                           ? "border-cyan-500/40 bg-cyan-950/15 text-cyan-400 border-l-cyan-400 shadow-[0_0_10px_rgba(6,182,212,0.05)]"
                           : "border-white/5 bg-black/30 text-cyan-400/80 hover:border-cyan-500/30 hover:bg-cyan-950/5 hover:text-cyan-400 border-l-cyan-500/10 hover:border-l-cyan-400"
                       }`}
@@ -280,8 +285,66 @@ type SidebarTerminalModeProps = {
   repositoryFiles: FileEntry[];
   isLoadingFiles: boolean;
   onFileClick: (oid: string, name: string) => void;
-  deleteLocalFileFromStorage: (activeFileId: string) => void;
+  onDeleteLocalFile: (oid: string) => void;
   renderLoadingState: (label: string) => React.ReactNode;
+};
+
+const normalizeCategoryParam = (value: string | null) => {
+  if (!value) return "ALL";
+
+  let normalized = value.trim().toLowerCase();
+  if (normalized === "dynamic-programming" || normalized === "dynamic-prog") normalized = "dynamic prog";
+  if (normalized === "linked-list") normalized = "linked list";
+  if (normalized === "interval-problems") normalized = "interval problems";
+  return normalized || "ALL";
+};
+
+const normalizeLanguageParam = (value: string | null) => {
+  const normalized = value?.trim().toLowerCase();
+  return normalized === "java" || normalized === "javascript" ? normalized : "ALL";
+};
+
+const normalizeDifficultyParam = (value: string | null): "ALL" | "EASY" | "MEDIUM" | "HARD" => {
+  const normalized = value?.trim().toUpperCase();
+  return normalized === "EASY" || normalized === "MEDIUM" || normalized === "HARD" ? normalized : "ALL";
+};
+
+const normalizeStructureValue = (value: string | null | undefined) => {
+  return (value ?? "").trim().toLowerCase().replace(/[-_]+/g, " ").replace(/\s+/g, " ");
+};
+
+const getFileLanguage = (file: FileEntry) => {
+  const explicitLanguage = file.language?.trim().toLowerCase();
+  if (explicitLanguage === "java" || explicitLanguage === "javascript") {
+    return explicitLanguage;
+  }
+
+  const extension = file.name.split(".").pop()?.toLowerCase();
+  if (extension === "java") return "java";
+  if (extension === "js" || extension === "jsx" || extension === "ts" || extension === "tsx") return "javascript";
+
+  const type = file.type?.toLowerCase() ?? "";
+  if (type.includes("java")) return "java";
+  if (type.includes("javascript") || type.includes("typescript")) return "javascript";
+  return "";
+};
+
+const getFileDifficulty = (file: FileEntry) => {
+  const raw = (file.difficulty_level || file.diffculty_level || "").trim().toUpperCase();
+  if (raw === "E" || raw === "EASY") return "E";
+  if (raw === "M" || raw === "MEDIUM") return "M";
+  if (raw === "H" || raw === "HARD") return "H";
+
+  const baseName = file.name.split(".")[0] ?? "";
+  const suffix = baseName.match(/([EMH])$/i)?.[1]?.toUpperCase();
+  return suffix === "M" || suffix === "H" ? suffix : "E";
+};
+
+const fileMatchesCategory = (file: FileEntry, categoryFilter: string) => {
+  const fileCategory = normalizeStructureValue(file.data_structure);
+  const targetCategory = normalizeStructureValue(categoryFilter);
+  if (!fileCategory || !targetCategory) return false;
+  return fileCategory === targetCategory || fileCategory.split(/[,|/]+/).some((part) => normalizeStructureValue(part) === targetCategory);
 };
 
 const SidebarTerminalMode = React.memo(({
@@ -292,7 +355,7 @@ const SidebarTerminalMode = React.memo(({
   repositoryFiles,
   isLoadingFiles,
   onFileClick,
-  deleteLocalFileFromStorage,
+  onDeleteLocalFile,
   renderLoadingState,
 }: SidebarTerminalModeProps) => {
   return (
@@ -319,7 +382,7 @@ const SidebarTerminalMode = React.memo(({
                     {localFiles.length > 0 ? (
                       localFiles.map((file) => (
                         <div
-                          key={file.oid}
+                          key={`${file.oid}:${file.name}`}
                           role="button"
                           tabIndex={0}
                           onClick={() => onFileClick(file.oid, file.name)}
@@ -341,7 +404,7 @@ const SidebarTerminalMode = React.memo(({
                               e.stopPropagation();
                               e.preventDefault();
                               if (window.confirm(`Are you sure you want to delete ${file.name}? This action cannot be undone.`)) {
-                                deleteLocalFileFromStorage(file.oid);
+                                onDeleteLocalFile(file.oid);
                               }
                             }}
                             className="ml-auto sidebar-details text-rose-500 hover:text-rose-400 cursor-pointer p-0.5"
@@ -364,7 +427,7 @@ const SidebarTerminalMode = React.memo(({
                     ) : repositoryFiles.length > 0 ? (
                       repositoryFiles.map((file) => (
                         <button
-                          key={file.oid || file.name}
+                          key={`${file.oid}:${file.name}`}
                           type="button"
                           onClick={() => onFileClick(file.oid, file.name)}
                           className="group file-button-compact flex w-full items-center justify-between gap-3 rounded-none border border-white/5 bg-black/30 px-3 py-2 text-left text-xs font-mono text-cyan-400/80 transition hover:border-cyan-500/30 hover:bg-cyan-950/5 hover:text-cyan-400 border-l-2 border-l-cyan-500/10 hover:border-l-cyan-400 cursor-pointer"
@@ -439,6 +502,7 @@ const DifficultyBadge = ({ level }: { level: string }) => {
 
 const FileExplorer = ({
   activeFile,
+  activeFileName,
   files,
   fileData,
   language,
@@ -447,15 +511,18 @@ const FileExplorer = ({
   onFileClick,
   onResizeStart,
   onCreateFile,
+  onDeleteLocalFile,
   isLoadingFiles,
   selectedMode,
   setSelectedMode,
   difficultyFilter,
   setDifficultyFilter,
 }: FileExplorerProps) => {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const queryCategory = searchParams.get("category");
+  const queryDifficulty = searchParams.get("difficulty");
   const queryLang = searchParams.get("lang");
+  const querySearch = searchParams.get("q");
 
   const [searchInput, setSearchInput] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -463,25 +530,74 @@ const FileExplorer = ({
   const [categoryFilter, setCategoryFilter] = useState<string>("ALL");
   const [languageFilter, setLanguageFilter] = useState<string>("ALL");
 
+  const updateSearchParam = useCallback((key: string, value: string) => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      const trimmed = value.trim();
+
+      if (!trimmed || trimmed === "ALL") {
+        if (!next.has(key)) return prev;
+        next.delete(key);
+        return next;
+      }
+
+      if (next.get(key) === trimmed) return prev;
+      next.set(key, trimmed);
+      return next;
+    });
+  }, [setSearchParams]);
+
   useEffect(() => {
-    if (queryCategory) {
-      let normalized = queryCategory.toLowerCase();
-      if (normalized === "dynamic-programming") normalized = "dynamic prog";
-      if (normalized === "linked-list") normalized = "linked list";
-      setCategoryFilter(normalized);
+    const normalized = normalizeCategoryParam(queryCategory);
+    setCategoryFilter(normalized);
+    if (normalized !== "ALL") {
       setSelectedMode("files-mode");
     }
   }, [queryCategory, setSelectedMode]);
 
   useEffect(() => {
-    if (queryLang) {
-      let normalized = queryLang.toLowerCase();
-      setLanguageFilter(normalized);
+    const normalized = normalizeLanguageParam(queryLang);
+    setLanguageFilter(normalized);
+    if (normalized !== "ALL") {
       setSelectedMode("files-mode");
     }
   }, [queryLang, setSelectedMode]);
 
-  const activeFileEntry = useMemo(() => files.find((file) => file.oid === activeFile), [files, activeFile]);
+  useEffect(() => {
+    const normalized = normalizeDifficultyParam(queryDifficulty);
+    setDifficultyFilter(normalized);
+    if (normalized !== "ALL") {
+      setSelectedMode("files-mode");
+    }
+  }, [queryDifficulty, setDifficultyFilter, setSelectedMode]);
+
+  useEffect(() => {
+    const nextSearch = querySearch ?? "";
+    setSearchInput((current) => current === nextSearch ? current : nextSearch);
+    if (nextSearch.trim()) {
+      setSelectedMode("files-mode");
+    }
+  }, [querySearch, setSelectedMode]);
+
+  const handleDifficultyFilterChange = useCallback((filter: "ALL" | "EASY" | "MEDIUM" | "HARD") => {
+    setDifficultyFilter(filter);
+    updateSearchParam("difficulty", filter === "ALL" ? "" : filter.toLowerCase());
+  }, [setDifficultyFilter, updateSearchParam]);
+
+  const handleCategoryFilterChange = useCallback((filter: string) => {
+    setCategoryFilter(filter);
+    updateSearchParam("category", filter);
+  }, [updateSearchParam]);
+
+  const handleLanguageFilterChange = useCallback((filter: string) => {
+    setLanguageFilter(filter);
+    updateSearchParam("lang", filter);
+  }, [updateSearchParam]);
+
+  const activeFileEntry = useMemo(
+    () => files.find((file) => file.oid === activeFile && file.name === activeFileName) ?? files.find((file) => file.oid === activeFile),
+    [files, activeFile, activeFileName],
+  );
   const localFiles = useMemo(() => files.filter((file) => file.isLocal), [files]);
   const repositoryFiles = useMemo(() => {
     return files.filter((file) => !file.isLocal && file.name.toLowerCase().startsWith("leetcode"));
@@ -489,11 +605,13 @@ const FileExplorer = ({
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
-      setDebouncedSearch(searchInput.trim().toLowerCase());
+      const trimmed = searchInput.trim();
+      setDebouncedSearch(trimmed.toLowerCase());
+      updateSearchParam("q", trimmed);
     }, 250);
 
     return () => window.clearTimeout(timeout);
-  }, [searchInput]);
+  }, [searchInput, updateSearchParam]);
 
   const filteredFiles = useMemo(() => {
     return files.filter((file) => {
@@ -504,23 +622,20 @@ const FileExplorer = ({
       }
 
       if (difficultyFilter !== "ALL") {
-        const fileDiff = file.difficulty_level || file.diffculty_level || "E";
         const targetDiff = difficultyFilter === "EASY" ? "E" : difficultyFilter === "MEDIUM" ? "M" : "H";
-        if (fileDiff !== targetDiff) {
+        if (getFileDifficulty(file) !== targetDiff) {
           return false;
         }
       }
 
       if (categoryFilter !== "ALL") {
-        const fileCat = file.data_structure?.toLowerCase() || "";
-        if (fileCat !== categoryFilter.toLowerCase()) {
+        if (!fileMatchesCategory(file, categoryFilter)) {
           return false;
         }
       }
 
       if (languageFilter !== "ALL") {
-        const fileLang = file.language?.toLowerCase() || "";
-        if (fileLang !== languageFilter.toLowerCase()) {
+        if (getFileLanguage(file) !== languageFilter.toLowerCase()) {
           return false;
         }
       }
@@ -530,12 +645,14 @@ const FileExplorer = ({
         const name = file.name.toLowerCase();
         const path = file.path?.toLowerCase() ?? "";
         const type = file.type?.toLowerCase() ?? "";
-        const structure = file.data_structure?.toLowerCase() ?? "";
+        const structure = normalizeStructureValue(file.data_structure);
+        const fileLanguage = getFileLanguage(file);
         return (
           name.includes(debouncedSearch) ||
           path.includes(debouncedSearch) ||
           type.includes(debouncedSearch) ||
-          structure.includes(debouncedSearch)
+          structure.includes(debouncedSearch) ||
+          fileLanguage.includes(debouncedSearch)
         );
       }
 
@@ -544,12 +661,6 @@ const FileExplorer = ({
   }, [files, debouncedSearch, difficultyFilter, categoryFilter, languageFilter]);
 
   const searchActive = Boolean(searchInput.trim()) || difficultyFilter !== "ALL" || categoryFilter !== "ALL" || languageFilter !== "ALL";
-
-  const deleteLocalFileFromStorage = useCallback((activeFileId: string) => {
-    if (!activeFileId) return;
-    localStorage.removeItem(`localFile:${activeFileId}`);
-    window.location.reload();
-  }, []);
 
   const detailsPanelClass = "p-4 sidebar-details space-y-3 border-b border-white/5 bg-[#08090a]/80 text-xs font-mono text-cyan-400/80";
 
@@ -678,16 +789,17 @@ const FileExplorer = ({
             setSearchInput={setSearchInput}
             isSmall={sidebarWidth < 160}
             difficultyFilter={difficultyFilter}
-            setDifficultyFilter={setDifficultyFilter}
+            setDifficultyFilter={handleDifficultyFilterChange}
             categoryFilter={categoryFilter}
-            setCategoryFilter={setCategoryFilter}
+            setCategoryFilter={handleCategoryFilterChange}
             languageFilter={languageFilter}
-            setLanguageFilter={setLanguageFilter}
+            setLanguageFilter={handleLanguageFilterChange}
             files={files}
             fileData={fileData}
             language={language}
             testCaseCount={testCaseCount}
             activeFile={activeFile}
+            activeFileName={activeFileName}
             onFileClick={onFileClick}
             isLoadingFiles={isLoadingFiles}
             filteredFiles={filteredFiles}
@@ -705,7 +817,7 @@ const FileExplorer = ({
             repositoryFiles={repositoryFiles}
             isLoadingFiles={isLoadingFiles}
             onFileClick={onFileClick}
-            deleteLocalFileFromStorage={deleteLocalFileFromStorage}
+            onDeleteLocalFile={onDeleteLocalFile}
             renderLoadingState={renderLoadingState}
           />
         )}

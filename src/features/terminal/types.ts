@@ -12,6 +12,7 @@ export type FileContentResponse = {
   content?: string;
   test_cases?: RawTestCase[];
   id?: string;
+  name?: string;
   problem_definition?: string;
   problem_hints?: unknown;
   difficulty_level?: string;
@@ -55,4 +56,5 @@ export type ExecuteCodeRequest = {
   oid: string;
   mode: ExecutionMode;
   customInput?: string;
+  fileName?: string;
 };

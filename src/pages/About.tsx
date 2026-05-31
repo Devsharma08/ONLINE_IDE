@@ -10,9 +10,7 @@ import {
   Database, 
   Languages, 
   GitBranch, 
-  ArrowRight,
-  Terminal,
-  ChevronRight
+  ArrowRight
 } from 'lucide-react';
 
 type RoadmapItem = {

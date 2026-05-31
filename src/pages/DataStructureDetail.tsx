@@ -145,7 +145,7 @@ const DataStructureDetail = () => {
         setLoading(true);
         const data = await fetchFileNames();
         setFiles(data);
-      } catch (err) {
+      } catch {
         setError("Failed to fetch repository challenge files.");
       } finally {
         setLoading(false);

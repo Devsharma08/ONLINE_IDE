@@ -29,8 +29,11 @@ export const fetchFileNames = async () => {
   return readJson<FileEntry[]>(response);
 };
 
-export const fetchFileContent = async (oid: string) => {
-  const response = await fetch(`${API_BASE_URL}/github/filecontent?oid=${encodeURIComponent(oid)}`);
+export const fetchFileContent = async (oid: string, name?: string) => {
+  const url = `${API_BASE_URL}/github/filecontent?oid=${encodeURIComponent(oid)}` + 
+              (name ? `&name=${encodeURIComponent(name)}` : "") + 
+              `&_cb=${Date.now()}`;
+  const response = await fetch(url);
 
   if (!response.ok) {
     throw new Error("Failed to load file content");

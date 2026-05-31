@@ -102,7 +102,7 @@ MATRIX_DATA.push(new Array(100).fill(0));
 export const BraceRcePixelArt: React.FC = () => {
   // Pre-calculate rendering targets once for stability, performance, and hydration matching
   const pixelMetadata = React.useMemo(() => {
-    return MATRIX_DATA.map((row, rowIndex) => {
+    return MATRIX_DATA.map((row) => {
       return row.map((pixel, colIndex) => {
         if (!pixel) return null;
         

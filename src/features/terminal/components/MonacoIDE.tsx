@@ -4,11 +4,19 @@ import { Loader2 } from "lucide-react";
 import type { ExecutionMode, SupportedLanguage } from "../types";
 
 type EditorInstance = Parameters<OnMount>[0];
+type FormattingModel = {
+  getLinesContent: () => string[];
+};
+type FormattingEdit = {
+  range: InstanceType<Monaco["Range"]>;
+  text: string;
+};
 
 type MonacoIDEProps = {
   code: string;
   language: SupportedLanguage;
   oid: string;
+  fileKey: string;
   handleRunCode: (
     code: string,
     language: SupportedLanguage,
@@ -32,9 +40,10 @@ const JAVA_BOILERPLATE = [
   "}",
 ].join("\n");
 
-const MonacoIDE = ({ handleRunCode, language, code, oid, onCodeChange, onFormatMount }: MonacoIDEProps) => {
+const MonacoIDE = ({ handleRunCode, language, code, oid, fileKey, onCodeChange, onFormatMount }: MonacoIDEProps) => {
   const editorRef = useRef<EditorInstance | null>(null);
   const monacoRef = useRef<Monaco | null>(null);
+  const lastFileKeyRef = useRef<string | null>(null);
   const decorationsRef = useRef<string[]>([]); // Prevents visual decoration memory leaks
   const propsRef = useRef({ handleRunCode, language, oid });
 
@@ -86,10 +95,10 @@ const MonacoIDE = ({ handleRunCode, language, code, oid, onCodeChange, onFormatM
 
     // Custom Formatting Provider for Java Code Spacing Alignment
     monaco.languages.registerDocumentFormattingEditProvider("java", {
-      provideDocumentFormattingEdits(model: any): any[] {
+      provideDocumentFormattingEdits(model: FormattingModel): FormattingEdit[] {
         const lines: string[] = model.getLinesContent();
         let indentLevel = 0;
-        const edits: any[] = [];
+        const edits: FormattingEdit[] = [];
 
         lines.forEach((line: string, index: number) => {
           const trimmed = line.trim();
@@ -121,6 +130,7 @@ const MonacoIDE = ({ handleRunCode, language, code, oid, onCodeChange, onFormatM
   const handleEditorDidMount: OnMount = (editor, monaco) => {
     editorRef.current = editor;
     monacoRef.current = monaco;
+    lastFileKeyRef.current = fileKey; // Initialize to prevent double setValue on mount
     configureEditorThemes(monaco);
     monaco.editor.setTheme("dark-theme");
 
@@ -164,7 +174,29 @@ const MonacoIDE = ({ handleRunCode, language, code, oid, onCodeChange, onFormatM
     });
   };
 
-  // 🔄 Monitor Context clearing actions safely
+  // 🔄 Update editor content when active file changes or code is updated externally
+  useEffect(() => {
+    const editor = editorRef.current;
+    const monaco = monacoRef.current;
+
+    if (editor && monaco && oid) {
+      const currentVal = editor.getValue();
+      const targetVal = code || (language === "java" ? JAVA_BOILERPLATE : "");
+
+      if (lastFileKeyRef.current !== fileKey || targetVal !== currentVal) {
+        lastFileKeyRef.current = fileKey;
+        editor.setValue(targetVal);
+
+        if (language === "java" && !isLocal) {
+          applyJavaDecorations(editor, monaco);
+        } else {
+          decorationsRef.current = editor.deltaDecorations(decorationsRef.current, []);
+        }
+      }
+    }
+  }, [fileKey, oid, code, language, isLocal]);
+
+  // 🔄 Monitor Context clearing/reset actions safely
   useEffect(() => {
     const editor = editorRef.current;
     const monaco = monacoRef.current;
@@ -187,7 +219,7 @@ const MonacoIDE = ({ handleRunCode, language, code, oid, onCodeChange, onFormatM
       <Editor
         height="100%"
         language={language}
-        value={code || (language === "java" ? JAVA_BOILERPLATE : "")}
+        defaultValue={code || (language === "java" ? JAVA_BOILERPLATE : "")}
         loading={
           <div className="flex h-full min-h-[220px] items-center justify-center gap-3 bg-[#01050f] text-sm font-medium text-indigo-200">
             <Loader2 className="h-5 w-5 animate-spin text-indigo-300" />

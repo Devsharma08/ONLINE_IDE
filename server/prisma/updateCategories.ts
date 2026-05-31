@@ -278,7 +278,7 @@ async function main() {
       console.log("✅ Database schema updated! 'data_structure' column verified/added successfully via Direct Port.");
       directUrl = directHostUrl; // Use the successful direct host connection string
     } catch (directErr) {
-      console.warn("Direct port 5432 connection timed out or failed. Falling back to default URL on port 6543...");
+      console.warn("Direct port 5432 connection timed out or failed. Falling back to default URL on port 6543...", directErr);
       try {
         const pool = new Pool({ connectionString: directUrl });
         await pool.query('ALTER TABLE "Problem" ADD COLUMN IF NOT EXISTS "data_structure" TEXT;');

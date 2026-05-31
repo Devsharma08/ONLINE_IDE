@@ -9,16 +9,17 @@ import DataStructureDetail from './pages/DataStructureDetail.tsx'
 
 // content import's
 import { CodeContext, type TestCase } from './context/codeContext.tsx'
+import type { ExecutionResult, SupportedLanguage } from './features/terminal/types.ts'
 import { FileNamesContext, type FileEntry } from './context/fileNamesContext.tsx'
 import { UserResponseContext } from './context/responseContent.tsx'
 
 const Root = () => {
   const [filesData, setFilesData] = useState<FileEntry[]>([])
   const [code, setCode] = useState('')
-  const [language, setLanguage] = useState('javascript')
+  const [language, setLanguage] = useState<SupportedLanguage>('javascript')
   const [testCases, setTestCases] = useState<TestCase[]>([])
   const [activeFile, setActiveFile] = useState('')
-  const [output, setOutput] = useState<unknown>(null)
+  const [output, setOutput] = useState<ExecutionResult | null>(null)
   const [customInput, setCustomInput] = useState('')
   const [customInputActive, setCustomInputActive] = useState(false)
 

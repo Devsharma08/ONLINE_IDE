@@ -205,7 +205,7 @@ export const BentoPixelArt: React.FC<BentoPixelArtProps> = ({ slug }) => {
 
   // Precompute grid delays and gradients for runtime stability and hydration match
   const pixelMetadata = React.useMemo(() => {
-    return matrix.map((row, rowIndex) => {
+    return matrix.map((row) => {
       return row.map((pixel, colIndex) => {
         if (!pixel) return null;
 
@@ -316,5 +316,4 @@ export const BentoPixelArt: React.FC<BentoPixelArtProps> = ({ slug }) => {
 };
 
 export default BentoPixelArt;
-
 

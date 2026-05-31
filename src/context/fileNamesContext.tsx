@@ -8,6 +8,7 @@ export type FileEntry = {
     path?: string;
     isLocal?: boolean;
     difficulty_level?: string;
+    diffculty_level?: string;
     data_structure?: string;
     language?: string;
 }

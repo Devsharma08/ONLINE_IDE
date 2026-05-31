@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, no-useless-assignment, no-useless-escape, preserve-caught-error */
 import { execFile } from "child_process";
 import type { Request, Response } from "express";
 import fs from "fs/promises";
@@ -19,6 +20,7 @@ type ExecuteBody = {
   oid?: unknown;
   mode?: unknown;
   customInput?: unknown;
+  fileName?: unknown;
 };
 
 type TestCaseRecord = {
@@ -53,6 +55,7 @@ const MAX_CODE_BYTES = 50_000;
 const MAX_CUSTOM_INPUT_BYTES = 20_000;
 const MAX_DOCKER_OUTPUT_BYTES = 1024 * 1024;
 const MAX_SUBMIT_TEST_CASES = 25;
+const EXECUTION_FILE_NAMES_CACHE_KEY = "executionFileNames";
 
 const getByteLength = (value: string) => Buffer.byteLength(value, "utf8");
 
@@ -92,7 +95,359 @@ const extractJsExportName = (wrapperCode: string): string | null => {
 
 
 
-const getJavaScriptRunner = (exportName: string) => `const fs = require("fs");\nconst path = require("path");\nconst exported = require("./index.js");\nconst fn = typeof exported === "function" ? exported : exported && typeof exported === "object" ? exported["${exportName}"] || exported[Object.keys(exported)[0]] : null;\nif (typeof fn !== "function") {\n  throw new Error("Could not resolve exported function for execution");\n}\nconst rawInput = fs.readFileSync(path.join(__dirname, "input.txt"), "utf8");\nconst lines = rawInput.replace(/\\r\\n/g, "\\n").split("\\n").filter((line) => line.length > 0);\nconst parseValue = (value) => {\n  const trimmed = value.trim();\n  if (trimmed === "true") return true;\n  if (trimmed === "false") return false;\n  if (/^[-+]?[0-9]+$/.test(trimmed)) return Number.parseInt(trimmed, 10);\n  if (/^[-+]?[0-9]*\\.[0-9]+$/.test(trimmed)) return Number.parseFloat(trimmed);\n  if (/^[\"'].*[\"']$/.test(trimmed)) return trimmed.replace(/^['\"]|['\"]$/g, "");\n  if (/^[\\\[\\{][\\s\\S]*[\\\]\\}]$/.test(trimmed)) {\n    try {\n      return JSON.parse(trimmed);\n    } catch (e) {\n      return trimmed;\n    }\n  }\n  return trimmed;\n};\nconst args = lines.map(parseValue);\n(async () => {\n  try {\n    if ("${exportName}" === "TimeLimitedCache") {\n      const cache = new fn();\n      const outputs = [];\n      const rawActions = rawInput.trim();\n      const regex = /(set|get|wait|count)\\(([^)]*)\\)/g;\n      let match;\n      while ((match = regex.exec(rawActions)) !== null) {\n        const method = match[1];\n        const rawArgs = match[2];\n        const argsList = rawArgs ? rawArgs.split(",").map(s => {\n          const trimmed = s.trim();\n          if (trimmed.startsWith("'") && trimmed.endsWith("'")) return trimmed.slice(1, -1);\n          if (trimmed.startsWith('"') && trimmed.endsWith('"')) return trimmed.slice(1, -1);\n          if (trimmed === "true") return true;\n          if (trimmed === "false") return false;\n          return Number(trimmed);\n        }) : [];\n        if (method === "set") {\n          cache.set(...argsList);\n        } else if (method === "get") {\n          const res = cache.get(...argsList);\n          const val = (res === -1 || res === undefined) ? "undefined" : res;\n          outputs.push(val);\n        } else if (method === "count") {\n          const res = cache.count();\n          outputs.push(res);\n        } else if (method === "wait") {\n          const ms = argsList[0] || 0;\n          await new Promise(resolve => setTimeout(resolve, ms));\n        }\n      }\n      console.log(outputs.join(","));\n      return;\n    }\n    if ("${exportName}" === "timeLimit") {\n      const limitFn = fn(async (x) => {\n        await new Promise(res => setTimeout(res, x));\n        return "Result";\n      }, 100);\n      const res1 = await limitFn(50).catch(err => err instanceof Error ? err.message : String(err));\n      const res2 = await limitFn(150).catch(err => err instanceof Error ? err.message : String(err));\n      if (res1 === "Result" && (res2 === "Time Limit Exceeded" || res2.includes("Time Limit"))) {\n        console.log("Result or timeout");\n      } else {\n        console.log("Failed Promise Time Limit: " + res1 + " | " + res2);\n      }\n      return;\n    }\n    if ("${exportName}" === "debounce") {\n      let count = 0;\n      const debounced = fn(() => { count++; }, 100);\n      debounced();\n      debounced();\n      debounced();\n      await new Promise(res => setTimeout(res, 50));\n      const countAfter50 = count;\n      await new Promise(res => setTimeout(res, 100));\n      const countAfter150 = count;\n      if (countAfter50 === 0 && countAfter150 === 1) {\n        console.log("Delayed execution");\n      } else {\n        console.log("Failed Debounce: " + countAfter50 + " | " + countAfter150);\n      }\n      return;\n    }\n    if ("${exportName}" === "promiseAll") {\n      const fn1 = () => new Promise(resolve => setTimeout(() => resolve(5), 10));\n      const fn2 = () => new Promise(resolve => setTimeout(() => resolve(10), 20));\n      const result = await fn([fn1, fn2]);\n      if (result && result[0] === 5 && result[1] === 10) {\n        console.log("Both resolved");\n      } else {\n        console.log("Failed promiseAll: " + JSON.stringify(result));\n      }\n      return;\n    }\n    const startMem = process.memoryUsage().heapUsed;\n    const startTime = process.hrtime.bigint();\n    const result = await fn(...args);\n    const endTime = process.hrtime.bigint();\n    const endMem = process.memoryUsage().heapUsed;\n    const durationMs = Number(endTime - startTime) / 1000000;\n    const memoryKb = Math.max(0, (endMem - startMem) / 1024);\n    if (result !== undefined) {\n      if (result !== null && typeof result === "object" && typeof result.then === "function") {\n        const resolved = await result;\n        if (resolved !== undefined) {\n          console.log(typeof resolved === "object" ? JSON.stringify(resolved) : resolved);\n        }\n      } else if (typeof result === "object") {\n        console.log(JSON.stringify(result));\n      } else {\n        console.log(result);\n      }\n    }\n    console.log(\"// SYS_METRICS: time=\" + durationMs.toFixed(3) + \" ms, memory=\" + memoryKb.toFixed(1) + \" KB\");\n  } catch (err) {\n    console.error(\"Execution Error:\", err instanceof Error ? err.message : String(err));\n    process.exit(1);\n  }\n})();`;
+const getJavaScriptRunner = (exportName: string, paramTypes: string[]) => `const fs = require("fs");
+const path = require("path");
+
+class ListNode {
+  constructor(val, next) {
+    this.val = (val === undefined ? 0 : val);
+    this.next = (next === undefined ? null : next);
+  }
+}
+global.ListNode = ListNode;
+
+class TreeNode {
+  constructor(val, left, right) {
+    this.val = (val === undefined ? 0 : val);
+    this.left = (left === undefined ? null : left);
+    this.right = (right === undefined ? null : right);
+  }
+}
+global.TreeNode = TreeNode;
+
+class Node {
+  constructor(val, neighbors, next, random) {
+    this.val = (val === undefined ? 0 : val);
+    this.neighbors = (neighbors === undefined ? [] : neighbors);
+    this.next = (next === undefined ? null : next);
+    this.random = (random === undefined ? null : random);
+  }
+}
+global.Node = Node;
+
+function parseListNode(raw) {
+  if (!raw) return null;
+  let arr = Array.isArray(raw) ? raw : null;
+  if (!arr) {
+    const trimmed = typeof raw === "string" ? raw.trim() : "";
+    if (!trimmed || trimmed === "[]" || trimmed === "null") return null;
+    try { arr = JSON.parse(trimmed); } catch (e) { return null; }
+  }
+  if (!Array.isArray(arr) || arr.length === 0) return null;
+  const head = new ListNode(arr[0]);
+  let current = head;
+  for (let i = 1; i < arr.length; i++) {
+    current.next = new ListNode(arr[i]);
+    current = current.next;
+  }
+  return head;
+}
+
+function parseTreeNode(raw) {
+  if (!raw) return null;
+  let arr = Array.isArray(raw) ? raw : null;
+  if (!arr) {
+    const trimmed = typeof raw === "string" ? raw.trim() : "";
+    if (!trimmed || trimmed === "[]" || trimmed === "null") return null;
+    try { arr = JSON.parse(trimmed); } catch (e) { return null; }
+  }
+  if (!Array.isArray(arr) || arr.length === 0 || arr[0] === null || arr[0] === undefined) return null;
+  const root = new TreeNode(arr[0]);
+  const queue = [root];
+  let i = 1;
+  while (queue.length > 0 && i < arr.length) {
+    const curr = queue.shift();
+    if (i < arr.length) {
+      const val = arr[i++];
+      if (val !== null && val !== undefined) {
+        curr.left = new TreeNode(val);
+        queue.push(curr.left);
+      }
+    }
+    if (i < arr.length) {
+      const val = arr[i++];
+      if (val !== null && val !== undefined) {
+        curr.right = new TreeNode(val);
+        queue.push(curr.right);
+      }
+    }
+  }
+  return root;
+}
+
+function parseNode(raw) {
+  if (!raw) return null;
+  let arr = Array.isArray(raw) ? raw : null;
+  if (!arr) {
+    const trimmed = typeof raw === "string" ? raw.trim() : "";
+    if (!trimmed || trimmed === "[]" || trimmed === "null") return null;
+    try { arr = JSON.parse(trimmed); } catch (e) { return null; }
+  }
+  if (!Array.isArray(arr) || arr.length === 0) return null;
+  const isGraph = arr.length > 0 && Array.isArray(arr[0]) && (arr[0].length === 0 || typeof arr[0][0] === "number");
+  if (isGraph) {
+    const n = arr.length;
+    const nodes = [];
+    for (let i = 0; i < n; i++) {
+      nodes.push(new Node(i + 1));
+    }
+    for (let i = 0; i < n; i++) {
+      const neighbors = arr[i];
+      for (const neighborId of neighbors) {
+        nodes[i].neighbors.push(nodes[neighborId - 1]);
+      }
+    }
+    return nodes[0];
+  } else {
+    const n = arr.length;
+    const nodes = [];
+    const randomIndices = [];
+    for (let i = 0; i < n; i++) {
+      const pair = arr[i];
+      nodes.push(new Node(pair[0]));
+      randomIndices.push(pair[1]);
+    }
+    for (let i = 0; i < n; i++) {
+      if (i < n - 1) {
+        nodes[i].next = nodes[i + 1];
+      }
+      const randIdx = randomIndices[i];
+      if (randIdx !== null && randIdx !== undefined) {
+        nodes[i].random = nodes[randIdx];
+      }
+    }
+    return nodes[0];
+  }
+}
+
+function formatListNode(head) {
+  if (!head) return "null";
+  const elements = [];
+  let curr = head;
+  while (curr) {
+    elements.push(curr.val);
+    curr = curr.next;
+  }
+  return "[" + elements.join(",") + "]";
+}
+
+function formatTreeNode(root) {
+  if (!root) return "[]";
+  const elements = [];
+  const queue = [root];
+  let lastNonNull = 0;
+  while (queue.length > 0) {
+    const curr = queue.shift();
+    if (curr) {
+      elements.push(curr.val);
+      lastNonNull = elements.length;
+      queue.push(curr.left);
+      queue.push(curr.right);
+    } else {
+      elements.push("null");
+    }
+  }
+  const trimmed = elements.slice(0, lastNonNull);
+  return "[" + trimmed.join(",") + "]";
+}
+
+function formatNode(root) {
+  if (!root) return "null";
+  const isGraph = root.neighbors !== undefined;
+  if (isGraph) {
+    const nodeMap = new Map();
+    const queue = [root];
+    nodeMap.set(root, 1);
+    let index = 0;
+    while (index < queue.length) {
+      const curr = queue[index++];
+      for (const neighbor of curr.neighbors) {
+        if (!nodeMap.has(neighbor)) {
+          nodeMap.set(neighbor, nodeMap.size + 1);
+          queue.push(neighbor);
+        }
+      }
+    }
+    const listRep = [];
+    for (let i = 0; i < queue.length; i++) {
+      const curr = queue[i];
+      const neighborIds = curr.neighbors.map(n => nodeMap.get(n));
+      listRep.push("[" + neighborIds.join(",") + "]");
+    }
+    return "[" + listRep.join(",") + "]";
+  } else {
+    const nodeMap = new Map();
+    const list = [];
+    let curr = root;
+    let idx = 0;
+    while (curr) {
+      list.push(curr);
+      nodeMap.set(curr, idx++);
+      curr = curr.next;
+    }
+    const listRep = [];
+    for (const node of list) {
+      const val = node.val;
+      const randNode = node.random;
+      const randIdx = randNode === null || randNode === undefined ? "null" : nodeMap.get(randNode);
+      listRep.push("[" + val + "," + randIdx + "]");
+    }
+    return "[" + listRep.join(",") + "]";
+  }
+}
+
+function format(value) {
+  if (value === null || value === undefined) return "null";
+  if (value instanceof ListNode) return formatListNode(value);
+  if (value instanceof TreeNode) return formatTreeNode(value);
+  if (value instanceof Node) return formatNode(value);
+  if (Array.isArray(value)) {
+    return "[" + value.map(format).join(",") + "]";
+  }
+  if (typeof value === "object") {
+    if ("val" in value && "left" in value && "right" in value) {
+      return formatTreeNode(value);
+    }
+    if ("val" in value && "next" in value) {
+      return formatListNode(value);
+    }
+    return JSON.stringify(value);
+  }
+  return String(value);
+}
+
+const exported = require("./index.js");
+const fn = typeof exported === "function" ? exported : exported && typeof exported === "object" ? exported["${exportName}"] || exported[Object.keys(exported)[0]] : null;
+if (typeof fn !== "function") {
+  throw new Error("Could not resolve exported function for execution");
+}
+const rawInput = fs.readFileSync(path.join(__dirname, "input.txt"), "utf8");
+const lines = rawInput.replace(/\\r\\n/g, "\\n").split("\\n").filter((line) => line.length > 0);
+const parseValue = (value) => {
+  const trimmed = value.trim();
+  if (trimmed === "true") return true;
+  if (trimmed === "false") return false;
+  if (/^[-+]?[0-9]+$/.test(trimmed)) return Number.parseInt(trimmed, 10);
+  if (/^[-+]?[0-9]*\\.[0-9]+$/.test(trimmed)) return Number.parseFloat(trimmed);
+  if (/^[\\\"'].*[\\\"']$/.test(trimmed)) return trimmed.replace(/^['\\\"\']|['\\\"\']$/g, "");
+  if (/^[\\\[\\{][\\s\\S]*[\\\]\\}]$/.test(trimmed)) {
+    try {
+      return JSON.parse(trimmed);
+    } catch (e) {
+      return trimmed;
+    }
+  }
+  return trimmed;
+};
+
+const paramTypes = ${JSON.stringify(paramTypes)};
+const args = lines.map((line, idx) => {
+  const parsed = parseValue(line);
+  const type = paramTypes[idx];
+  if (type === "TreeNode") return parseTreeNode(parsed);
+  if (type === "ListNode") return parseListNode(parsed);
+  if (type === "Node") return parseNode(parsed);
+  return parsed;
+});
+
+(async () => {
+  try {
+    if ("${exportName}" === "TimeLimitedCache") {
+      const cache = new fn();
+      const outputs = [];
+      const rawActions = rawInput.trim();
+      const regex = /(set|get|wait|count)\\(([^)]*)\\)/g;
+      let match;
+      while ((match = regex.exec(rawActions)) !== null) {
+        const method = match[1];
+        const rawArgs = match[2];
+        const argsList = rawArgs ? rawArgs.split(",").map(s => {
+          const trimmed = s.trim();
+          if (trimmed.startsWith("'") && trimmed.endsWith("'")) return trimmed.slice(1, -1);
+          if (trimmed.startsWith('"') && trimmed.endsWith('"')) return trimmed.slice(1, -1);
+          if (trimmed === "true") return true;
+          if (trimmed === "false") return false;
+          return Number(trimmed);
+        }) : [];
+        if (method === "set") {
+          cache.set(...argsList);
+        } else if (method === "get") {
+          const res = cache.get(...argsList);
+          const val = (res === -1 || res === undefined) ? "undefined" : res;
+          outputs.push(val);
+        } else if (method === "count") {
+          const res = cache.count();
+          outputs.push(res);
+        } else if (method === "wait") {
+          const ms = argsList[0] || 0;
+          await new Promise(resolve => setTimeout(resolve, ms));
+        }
+      }
+      console.log(outputs.join(","));
+      return;
+    }
+    if ("${exportName}" === "timeLimit") {
+      const limitFn = fn(async (x) => {
+        await new Promise(res => setTimeout(res, x));
+        return "Result";
+      }, 100);
+      const res1 = await limitFn(50).catch(err => err instanceof Error ? err.message : String(err));
+      const res2 = await limitFn(150).catch(err => err instanceof Error ? err.message : String(err));
+      if (res1 === "Result" && (res2 === "Time Limit Exceeded" || res2.includes("Time Limit"))) {
+        console.log("Result or timeout");
+      } else {
+        console.log("Failed Promise Time Limit: " + res1 + " | " + res2);
+      }
+      return;
+    }
+    if ("${exportName}" === "debounce") {
+      let count = 0;
+      const debounced = fn(() => { count++; }, 100);
+      debounced();
+      debounced();
+      debounced();
+      await new Promise(res => setTimeout(res, 50));
+      const countAfter50 = count;
+      await new Promise(res => setTimeout(res, 100));
+      const countAfter150 = count;
+      if (countAfter50 === 0 && countAfter150 === 1) {
+        console.log("Delayed execution");
+      } else {
+        console.log("Failed Debounce: " + countAfter50 + " | " + countAfter150);
+      }
+      return;
+    }
+    if ("${exportName}" === "promiseAll") {
+      const fn1 = () => new Promise(resolve => setTimeout(() => resolve(5), 10));
+      const fn2 = () => new Promise(resolve => setTimeout(() => resolve(10), 20));
+      const result = await fn([fn1, fn2]);
+      if (result && result[0] === 5 && result[1] === 10) {
+        console.log("Both resolved");
+      } else {
+        console.log("Failed promiseAll: " + JSON.stringify(result));
+      }
+      return;
+    }
+    const startMem = process.memoryUsage().heapUsed;
+    const startTime = process.hrtime.bigint();
+    const result = await fn(...args);
+    const endTime = process.hrtime.bigint();
+    const endMem = process.memoryUsage().heapUsed;
+    const durationMs = Number(endTime - startTime) / 1000000;
+    const memoryKb = Math.max(0, (endMem - startMem) / 1024);
+    if (result !== undefined) {
+      let resolved = result;
+      if (result !== null && typeof result === "object" && typeof result.then === "function") {
+        resolved = await result;
+      }
+      console.log(format(resolved));
+    }
+    console.log("// SYS_METRICS: time=" + durationMs.toFixed(3) + " ms, memory=" + memoryKb.toFixed(1) + " KB");
+  } catch (err) {
+    console.error("Execution Error:", err instanceof Error ? err.message : String(err));
+    process.exit(1);
+  }
+})();`;
 
 // checking wrappercode contains // test wrapper comment
 const isDefaultJavaWrapper = (wrapperCode: string) => wrapperCode.includes("// Test wrapper");
@@ -108,18 +463,29 @@ const getJavaMainWrapper = () => `public class Main {
         .map(String::trim)
         .filter(s -> !s.isEmpty())
         .toArray(String[]::new);
-    java.lang.reflect.Method target = java.util.Arrays.stream(Solution.class.getDeclaredMethods())
+    if (isDesignCase(Solution.class, lines)) {
+      runDesignCase(Solution.class, lines);
+      return;
+    }
+    if (isDesignActionCase(Solution.class, lines)) {
+      runDesignActionCase(Solution.class, lines);
+      return;
+    }
+
+    java.lang.reflect.Method[] candidates = java.util.Arrays.stream(Solution.class.getDeclaredMethods())
         .filter(m -> java.lang.reflect.Modifier.isPublic(m.getModifiers()))
         .filter(m -> !m.getName().equals("main"))
-        .findFirst()
-        .orElseThrow(() -> new RuntimeException("No public solution method found"));
+        .filter(m -> !m.isSynthetic())
+        .toArray(java.lang.reflect.Method[]::new);
+    InvocationPlan plan = selectInvocation(candidates, lines);
+    java.lang.reflect.Method target = plan.method;
     Object instance = java.lang.reflect.Modifier.isStatic(target.getModifiers()) ? null : Solution.class.getDeclaredConstructor().newInstance();
 
-    Object[] parsedArgs = parseArguments(target.getGenericParameterTypes(), lines);
+    Object[] parsedArgs = plan.args;
 
     long startMem = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
     long startTime = System.nanoTime();
-    Object result = target.invoke(instance, parsedArgs);
+    Object result = invokeTarget(target, instance, parsedArgs);
     long endTime = System.nanoTime();
     long endMem = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
 
@@ -137,7 +503,256 @@ const getJavaMainWrapper = () => `public class Main {
     System.out.println("// SYS_METRICS: time=" + String.format("%.3f", durationMs) + " ms, memory=" + String.format("%.1f", memoryKb) + " KB");
   }
 
+  private static Object invokeTarget(java.lang.reflect.Method target, Object instance, Object[] args) throws Exception {
+    try {
+      return target.invoke(instance, args);
+    } catch (java.lang.reflect.InvocationTargetException error) {
+      throw unwrapInvocationException(error);
+    }
+  }
+
+  private static Exception unwrapInvocationException(java.lang.reflect.InvocationTargetException error) {
+    Throwable cause = error.getCause();
+    if (cause instanceof Exception) {
+      return (Exception) cause;
+    }
+    if (cause instanceof Error) {
+      throw (Error) cause;
+    }
+    return new RuntimeException(cause);
+  }
+
+  private static class InvocationPlan {
+    final java.lang.reflect.Method method;
+    final Object[] args;
+
+    InvocationPlan(java.lang.reflect.Method method, Object[] args) {
+      this.method = method;
+      this.args = args;
+    }
+  }
+
+  private static class ActionCall {
+    final String name;
+    final String rawArgs;
+
+    ActionCall(String name, String rawArgs) {
+      this.name = name;
+      this.rawArgs = rawArgs;
+    }
+  }
+
+  private static InvocationPlan selectInvocation(java.lang.reflect.Method[] candidates, String[] lines) {
+    if (candidates.length == 0) {
+      throw new RuntimeException("No public solution method found");
+    }
+
+    Exception lastError = null;
+    for (java.lang.reflect.Method candidate : candidates) {
+      try {
+        Object[] args = parseArguments(candidate.getGenericParameterTypes(), lines);
+        return new InvocationPlan(candidate, args);
+      } catch (Exception error) {
+        lastError = error;
+      }
+    }
+
+    String methodSummary = java.util.Arrays.stream(candidates)
+        .map(m -> m.getName() + "(" + java.util.Arrays.stream(m.getGenericParameterTypes()).map(java.lang.reflect.Type::getTypeName).collect(java.util.stream.Collectors.joining(", ")) + ")")
+        .collect(java.util.stream.Collectors.joining("; "));
+    throw new IllegalArgumentException("Unable to match input with any public solution method. Available methods: " + methodSummary + ". Last parse error: " + (lastError == null ? "unknown" : lastError.getMessage()), lastError);
+  }
+
+  private static boolean isDesignCase(Class<?> clazz, String[] lines) {
+    if (lines.length < 2) return false;
+
+    java.util.List<String> operations;
+    try {
+      operations = parseOperationNames(lines[0]);
+    } catch (Exception error) {
+      return false;
+    }
+
+    if (operations.size() < 2) return false;
+
+    java.util.List<String> argumentGroups;
+    try {
+      argumentGroups = getArrayItems(lines[1]);
+    } catch (Exception error) {
+      return false;
+    }
+    if (operations.size() != argumentGroups.size()) return false;
+
+    java.util.Set<String> methodNames = java.util.Arrays.stream(clazz.getDeclaredMethods())
+        .filter(m -> java.lang.reflect.Modifier.isPublic(m.getModifiers()))
+        .map(java.lang.reflect.Method::getName)
+        .collect(java.util.stream.Collectors.toSet());
+
+    for (int i = 1; i < operations.size(); i++) {
+      if (!methodNames.contains(operations.get(i))) return false;
+    }
+    return true;
+  }
+
+  private static void runDesignCase(Class<?> clazz, String[] lines) throws Exception {
+    java.util.List<String> operations = parseOperationNames(lines[0]);
+    java.util.List<String> argumentGroups = getArrayItems(lines[1]);
+    java.util.List<String> outputs = new java.util.ArrayList<>();
+
+    Object instance = constructDesignInstance(clazz, argumentGroups.get(0));
+    outputs.add("null");
+
+    for (int i = 1; i < operations.size(); i++) {
+      java.lang.reflect.Method target = findDesignMethod(clazz, operations.get(i), argumentGroups.get(i));
+      Object[] args = parseArgumentGroup(target.getGenericParameterTypes(), argumentGroups.get(i));
+      Object result = invokeTarget(target, java.lang.reflect.Modifier.isStatic(target.getModifiers()) ? null : instance, args);
+      outputs.add(target.getReturnType() == void.class ? "null" : format(result));
+    }
+
+    System.out.println("[" + String.join(",", outputs) + "]");
+  }
+
+  private static boolean isDesignActionCase(Class<?> clazz, String[] lines) {
+    java.util.List<ActionCall> calls = parseDesignActionCalls(lines);
+    if (calls.isEmpty()) return false;
+
+    java.util.Set<String> methodNames = java.util.Arrays.stream(clazz.getDeclaredMethods())
+        .filter(m -> java.lang.reflect.Modifier.isPublic(m.getModifiers()))
+        .map(java.lang.reflect.Method::getName)
+        .collect(java.util.stream.Collectors.toSet());
+
+    int start = methodNames.contains(calls.get(0).name) ? 0 : 1;
+    if (start == 1 && calls.size() == 1) return true;
+
+    for (int i = start; i < calls.size(); i++) {
+      if (!methodNames.contains(calls.get(i).name)) return false;
+    }
+    return true;
+  }
+
+  private static void runDesignActionCase(Class<?> clazz, String[] lines) throws Exception {
+    java.util.List<ActionCall> calls = parseDesignActionCalls(lines);
+    java.util.List<String> outputs = new java.util.ArrayList<>();
+    java.util.Set<String> methodNames = java.util.Arrays.stream(clazz.getDeclaredMethods())
+        .filter(m -> java.lang.reflect.Modifier.isPublic(m.getModifiers()))
+        .map(java.lang.reflect.Method::getName)
+        .collect(java.util.stream.Collectors.toSet());
+
+    int start = 0;
+    Object instance;
+    if (!calls.isEmpty() && !methodNames.contains(calls.get(0).name)) {
+      instance = constructDesignInstance(clazz, calls.get(0).rawArgs);
+      outputs.add("null");
+      start = 1;
+    } else {
+      instance = constructDesignInstance(clazz, "[]");
+    }
+
+    for (int i = start; i < calls.size(); i++) {
+      ActionCall call = calls.get(i);
+      java.lang.reflect.Method target = findDesignMethod(clazz, call.name, call.rawArgs);
+      Object[] args = parseArgumentGroup(target.getGenericParameterTypes(), call.rawArgs);
+      Object result = invokeTarget(target, java.lang.reflect.Modifier.isStatic(target.getModifiers()) ? null : instance, args);
+      outputs.add(target.getReturnType() == void.class ? "null" : format(result));
+    }
+
+    System.out.println("[" + String.join(",", outputs) + "]");
+  }
+
+  private static Object constructDesignInstance(Class<?> clazz, String rawArgs) throws Exception {
+    Exception lastError = null;
+    for (java.lang.reflect.Constructor<?> constructor : clazz.getDeclaredConstructors()) {
+      try {
+        constructor.setAccessible(true);
+        Object[] args = parseArgumentGroup(constructor.getGenericParameterTypes(), rawArgs);
+        try {
+          return constructor.newInstance(args);
+        } catch (java.lang.reflect.InvocationTargetException error) {
+          throw unwrapInvocationException(error);
+        }
+      } catch (Exception error) {
+        lastError = error;
+      }
+    }
+    throw new IllegalArgumentException("Unable to construct design class from arguments " + rawArgs + ": " + (lastError == null ? "unknown" : lastError.getMessage()), lastError);
+  }
+
+  private static java.lang.reflect.Method findDesignMethod(Class<?> clazz, String methodName, String rawArgs) {
+    Exception lastError = null;
+    for (java.lang.reflect.Method method : clazz.getDeclaredMethods()) {
+      if (!java.lang.reflect.Modifier.isPublic(method.getModifiers()) || !method.getName().equals(methodName)) {
+        continue;
+      }
+      try {
+        parseArgumentGroup(method.getGenericParameterTypes(), rawArgs);
+        return method;
+      } catch (Exception error) {
+        lastError = error;
+      }
+    }
+    throw new IllegalArgumentException("Unable to match design method '" + methodName + "' with arguments " + rawArgs + ": " + (lastError == null ? "method not found" : lastError.getMessage()), lastError);
+  }
+
+  private static java.util.List<String> parseOperationNames(String raw) {
+    java.util.List<String> items = getArrayItems(raw);
+    java.util.List<String> operations = new java.util.ArrayList<>();
+    for (String item : items) {
+      String trimmed = item.trim();
+      if (!isQuoted(trimmed)) return java.util.Collections.emptyList();
+      operations.add(unquote(trimmed));
+    }
+    return operations;
+  }
+
+  private static java.util.List<ActionCall> parseDesignActionCalls(String[] lines) {
+    String raw = String.join(",", lines).trim();
+    if (raw.isEmpty()) return java.util.Collections.emptyList();
+    if (looksLikeArray(raw)) {
+      raw = raw.substring(1, raw.length() - 1);
+    }
+
+    java.util.List<ActionCall> calls = new java.util.ArrayList<>();
+    for (String item : splitTopLevel(raw)) {
+      String trimmed = item.trim();
+      int openParen = trimmed.indexOf('(');
+      if (openParen <= 0 || !trimmed.endsWith(")")) {
+        return java.util.Collections.emptyList();
+      }
+
+      String name = trimmed.substring(0, openParen).trim();
+      if (!name.matches("[A-Za-z_$][A-Za-z0-9_$]*")) {
+        return java.util.Collections.emptyList();
+      }
+
+      String args = trimmed.substring(openParen + 1, trimmed.length() - 1).trim();
+      calls.add(new ActionCall(name, args.isEmpty() ? "[]" : "[" + args + "]"));
+    }
+    return calls;
+  }
+
+  private static Object[] parseArgumentGroup(java.lang.reflect.Type[] paramTypes, String rawArgs) {
+    java.util.List<String> items = getArrayItems(rawArgs);
+    if (items.size() != paramTypes.length) {
+      throw new IllegalArgumentException("Expected " + paramTypes.length + " argument(s), received " + items.size());
+    }
+
+    Object[] args = new Object[paramTypes.length];
+    for (int i = 0; i < paramTypes.length; i++) {
+      args[i] = parseValue(items.get(i), paramTypes[i]);
+    }
+    return args;
+  }
+
   private static Object[] parseArguments(java.lang.reflect.Type[] paramTypes, String[] lines) {
+    if (paramTypes.length > 1 && lines.length == 1 && looksLikeArray(lines[0])) {
+      try {
+        Object[] packedArgs = parseArgumentGroup(paramTypes, lines[0]);
+        return packedArgs;
+      } catch (Exception ignored) {
+        // Fall back to one input line per parameter below.
+      }
+    }
+
     Object[] args = new Object[paramTypes.length];
     for (int i = 0; i < paramTypes.length; i++) {
       if (i >= lines.length) {
@@ -152,6 +767,58 @@ const getJavaMainWrapper = () => `public class Main {
       }
     }
     return args;
+  }
+
+  private static boolean looksLikeArray(String raw) {
+    String trimmed = raw == null ? "" : raw.trim();
+    return trimmed.startsWith("[") && trimmed.endsWith("]");
+  }
+
+  private static boolean isNullLiteral(String raw) {
+    return raw == null || raw.trim().equalsIgnoreCase("null");
+  }
+
+  private static boolean isQuoted(String raw) {
+    String trimmed = raw == null ? "" : raw.trim();
+    if (trimmed.length() < 2) return false;
+    char first = trimmed.charAt(0);
+    char last = trimmed.charAt(trimmed.length() - 1);
+    return (first == '"' && last == '"') || (first == '\\'' && last == '\\'');
+  }
+
+  private static String unquote(String raw) {
+    String trimmed = raw == null ? "" : raw.trim();
+    return isQuoted(trimmed) ? trimmed.substring(1, trimmed.length() - 1) : trimmed;
+  }
+
+  private static int parseIntLiteral(String raw) {
+    String clean = unquote(raw).trim();
+    if (clean.equalsIgnoreCase("INF") || clean.equalsIgnoreCase("INFINITY") || clean.equalsIgnoreCase("INTEGER.MAX_VALUE")) {
+      return Integer.MAX_VALUE;
+    }
+    if (clean.equalsIgnoreCase("-INF") || clean.equalsIgnoreCase("-INFINITY") || clean.equalsIgnoreCase("INTEGER.MIN_VALUE")) {
+      return Integer.MIN_VALUE;
+    }
+    return Integer.parseInt(clean);
+  }
+
+  private static long parseLongLiteral(String raw) {
+    return Long.parseLong(unquote(raw).trim());
+  }
+
+  private static double parseDoubleLiteral(String raw) {
+    return Double.parseDouble(unquote(raw).trim());
+  }
+
+  private static java.util.List<String> getArrayItems(String raw) {
+    String trimmed = raw == null ? "" : raw.trim();
+    if (!looksLikeArray(trimmed)) {
+      throw new IllegalArgumentException("Expected JSON-style array, received '" + raw + "'");
+    }
+    if (trimmed.equals("[]")) {
+      return new java.util.ArrayList<>();
+    }
+    return splitTopLevel(trimmed.substring(1, trimmed.length() - 1));
   }
 
   private static Object getDefaultValue(java.lang.reflect.Type type) {
@@ -185,23 +852,26 @@ const getJavaMainWrapper = () => `public class Main {
     String trimmed = raw.trim();
     if (type instanceof Class<?>) {
       Class<?> clazz = (Class<?>) type;
+      if (isNullLiteral(trimmed) && !clazz.isPrimitive()) {
+        return null;
+      }
       if (clazz == String.class) {
-        return trimmed.replaceAll("^['\\\"']|['\\\"']$", "");
+        return unquote(trimmed);
       }
       if (clazz == int.class || clazz == Integer.class) {
-        return Integer.parseInt(trimmed);
+        return parseIntLiteral(trimmed);
       }
       if (clazz == long.class || clazz == Long.class) {
-        return Long.parseLong(trimmed);
+        return parseLongLiteral(trimmed);
       }
       if (clazz == double.class || clazz == Double.class) {
-        return Double.parseDouble(trimmed);
+        return parseDoubleLiteral(trimmed);
       }
       if (clazz == boolean.class || clazz == Boolean.class) {
-        return Boolean.parseBoolean(trimmed);
+        return Boolean.parseBoolean(unquote(trimmed));
       }
       if (clazz == char.class || clazz == Character.class) {
-        String cleanChar = trimmed.replaceAll("^['\\\"']|['\\\"']$", "");
+        String cleanChar = unquote(trimmed);
         return cleanChar.length() > 0 ? cleanChar.charAt(0) : '\\0';
       }
       if (clazz.isArray()) {
@@ -219,26 +889,34 @@ const getJavaMainWrapper = () => `public class Main {
       if (clazz.getSimpleName().equals("Node")) {
         return parseNode(trimmed);
       }
-      return null;
+      if (clazz.getSimpleName().equals("Interval")) {
+        return parseInterval(trimmed);
+      }
+      return parseObject(trimmed, clazz);
     }
     if (type instanceof java.lang.reflect.ParameterizedType) {
       java.lang.reflect.ParameterizedType parameterized = (java.lang.reflect.ParameterizedType) type;
       java.lang.reflect.Type rawType = parameterized.getRawType();
-      if (rawType == java.util.List.class) {
+      if (rawType instanceof Class<?> && java.util.List.class.isAssignableFrom((Class<?>) rawType)) {
         java.lang.reflect.Type elementType = parameterized.getActualTypeArguments()[0];
         return parseList(trimmed, elementType);
       }
     }
-    return trimmed.replaceAll("^['\\\"']|['\\\"']$", "");
+    return unquote(trimmed);
   }
 
   private static Object parseArray(String raw, Class<?> componentType) {
     String trimmed = raw.trim();
+    if (isNullLiteral(trimmed)) {
+      return null;
+    }
+    if (!looksLikeArray(trimmed)) {
+      throw new IllegalArgumentException("Expected array for type " + componentType.getSimpleName() + "[], received '" + raw + "'");
+    }
     if (trimmed.equals("[]")) {
       return java.lang.reflect.Array.newInstance(componentType, 0);
     }
-    String inner = trimmed.substring(1, trimmed.length() - 1);
-    java.util.List<String> items = splitTopLevel(inner);
+    java.util.List<String> items = getArrayItems(trimmed);
     Object array = java.lang.reflect.Array.newInstance(componentType, items.size());
     for (int i = 0; i < items.size(); i++) {
       java.lang.reflect.Array.set(array, i, parseValue(items.get(i), componentType));
@@ -248,11 +926,16 @@ const getJavaMainWrapper = () => `public class Main {
 
   private static java.util.List<Object> parseList(String raw, java.lang.reflect.Type elementType) {
     String trimmed = raw.trim();
+    if (isNullLiteral(trimmed)) {
+      return null;
+    }
+    if (!looksLikeArray(trimmed)) {
+      throw new IllegalArgumentException("Expected list input, received '" + raw + "'");
+    }
     if (trimmed.equals("[]")) {
       return new java.util.ArrayList<>();
     }
-    String inner = trimmed.substring(1, trimmed.length() - 1);
-    java.util.List<String> items = splitTopLevel(inner);
+    java.util.List<String> items = getArrayItems(trimmed);
     java.util.List<Object> list = new java.util.ArrayList<>();
     for (String item : items) {
       list.add(parseValue(item, elementType));
@@ -281,9 +964,9 @@ const getJavaMainWrapper = () => `public class Main {
         current.append(c);
         continue;
       }
-      if (c == '[' || c == '{') {
+      if (c == '[' || c == '{' || c == '(') {
         depth++;
-      } else if (c == ']' || c == '}') {
+      } else if (c == ']' || c == '}' || c == ')') {
         depth--;
       } else if (c == ',' && depth == 0) {
         values.add(current.toString().trim());
@@ -312,6 +995,9 @@ const getJavaMainWrapper = () => `public class Main {
     if (clazz.getSimpleName().equals("Node")) {
       return formatNode(value);
     }
+    if (clazz.getSimpleName().equals("Interval")) {
+      return formatInterval(value);
+    }
     if (clazz.isArray()) {
       return arrayToString(value);
     }
@@ -336,11 +1022,13 @@ const getJavaMainWrapper = () => `public class Main {
 
   private static Object parseListNode(String raw) {
     String trimmed = raw.trim();
-    if (trimmed.equals("[]") || trimmed.equals("null")) {
+    if (trimmed.equals("[]") || isNullLiteral(trimmed)) {
       return null;
     }
-    String inner = trimmed.substring(1, trimmed.length() - 1);
-    java.util.List<String> items = splitTopLevel(inner);
+    if (!looksLikeArray(trimmed)) {
+      throw new IllegalArgumentException("Invalid linked list format: '" + raw + "'. Linked lists must be represented as a JSON array (e.g., [1,2,3]).");
+    }
+    java.util.List<String> items = getArrayItems(trimmed);
     if (items.isEmpty()) {
       return null;
     }
@@ -350,7 +1038,7 @@ const getJavaMainWrapper = () => `public class Main {
       Object head = null;
       Object current = null;
       for (String item : items) {
-        int val = Integer.parseInt(item.trim());
+        int val = parseIntLiteral(item);
         Object node = valueConstructor.newInstance(val);
         if (head == null) {
           head = node;
@@ -362,20 +1050,23 @@ const getJavaMainWrapper = () => `public class Main {
         }
       }
       return head;
+    } catch (NumberFormatException e) {
+      throw new IllegalArgumentException("Invalid linked list element: '" + e.getMessage() + "'. Elements must be integers.");
     } catch (Exception e) {
-      e.printStackTrace();
-      return null;
+      throw new RuntimeException("Error parsing linked list: " + e.getMessage(), e);
     }
   }
 
   private static Object parseTreeNode(String raw) {
     String trimmed = raw.trim();
-    if (trimmed.equals("[]") || trimmed.equals("null")) {
+    if (trimmed.equals("[]") || isNullLiteral(trimmed)) {
       return null;
     }
-    String inner = trimmed.substring(1, trimmed.length() - 1);
-    java.util.List<String> items = splitTopLevel(inner);
-    if (items.isEmpty() || items.get(0).equals("null")) {
+    if (!looksLikeArray(trimmed)) {
+      throw new IllegalArgumentException("Invalid binary tree format: '" + raw + "'. Trees must be represented as a JSON array (e.g., [1,2,null,3]).");
+    }
+    java.util.List<String> items = getArrayItems(trimmed);
+    if (items.isEmpty() || isNullLiteral(items.get(0))) {
       return null;
     }
     try {
@@ -384,7 +1075,12 @@ const getJavaMainWrapper = () => `public class Main {
       java.lang.reflect.Field leftField = treeNodeClass.getField("left");
       java.lang.reflect.Field rightField = treeNodeClass.getField("right");
 
-      Object root = constructor.newInstance(Integer.parseInt(items.get(0).trim()));
+      Object root;
+      try {
+        root = constructor.newInstance(parseIntLiteral(items.get(0)));
+      } catch (NumberFormatException e) {
+        throw new IllegalArgumentException("Invalid binary tree node value: '" + items.get(0).trim() + "'. Node values must be integers or null.");
+      }
       java.util.Queue<Object> queue = new java.util.LinkedList<>();
       queue.add(root);
 
@@ -394,8 +1090,13 @@ const getJavaMainWrapper = () => `public class Main {
 
         if (i < items.size()) {
           String valStr = items.get(i).trim();
-          if (!valStr.equals("null") && !valStr.isEmpty()) {
-            Object left = constructor.newInstance(Integer.parseInt(valStr));
+          if (!isNullLiteral(valStr) && !valStr.isEmpty()) {
+            Object left;
+            try {
+              left = constructor.newInstance(parseIntLiteral(valStr));
+            } catch (NumberFormatException e) {
+              throw new IllegalArgumentException("Invalid binary tree node value: '" + valStr + "'. Node values must be integers or null.");
+            }
             leftField.set(curr, left);
             queue.add(left);
           }
@@ -404,8 +1105,13 @@ const getJavaMainWrapper = () => `public class Main {
 
         if (i < items.size()) {
           String valStr = items.get(i).trim();
-          if (!valStr.equals("null") && !valStr.isEmpty()) {
-            Object right = constructor.newInstance(Integer.parseInt(valStr));
+          if (!isNullLiteral(valStr) && !valStr.isEmpty()) {
+            Object right;
+            try {
+              right = constructor.newInstance(parseIntLiteral(valStr));
+            } catch (NumberFormatException e) {
+              throw new IllegalArgumentException("Invalid binary tree node value: '" + valStr + "'. Node values must be integers or null.");
+            }
             rightField.set(curr, right);
             queue.add(right);
           }
@@ -413,9 +1119,10 @@ const getJavaMainWrapper = () => `public class Main {
         }
       }
       return root;
+    } catch (IllegalArgumentException e) {
+      throw e;
     } catch (Exception e) {
-      e.printStackTrace();
-      return null;
+      throw new RuntimeException("Error parsing binary tree: " + e.getMessage(), e);
     }
   }
 
@@ -435,8 +1142,7 @@ const getJavaMainWrapper = () => `public class Main {
       }
 
       if (isGraph) {
-        String inner = trimmed.substring(1, trimmed.length() - 1);
-        java.util.List<String> items = splitTopLevel(inner);
+        java.util.List<String> items = getArrayItems(trimmed);
         if (items.isEmpty()) return null;
         
         java.lang.reflect.Constructor<?> constructor = nodeClass.getConstructor(int.class);
@@ -451,18 +1157,16 @@ const getJavaMainWrapper = () => `public class Main {
         for (int i = 0; i < n; i++) {
           String neighborListRaw = items.get(i).trim();
           if (neighborListRaw.equals("[]") || neighborListRaw.isEmpty()) continue;
-          String subInner = neighborListRaw.substring(1, neighborListRaw.length() - 1);
-          java.util.List<String> neighborIds = splitTopLevel(subInner);
+          java.util.List<String> neighborIds = getArrayItems(neighborListRaw);
           java.util.List<Object> neighbors = (java.util.List<Object>) neighborsField.get(nodes[i]);
           for (String idStr : neighborIds) {
-            int id = Integer.parseInt(idStr.trim());
+            int id = parseIntLiteral(idStr);
             neighbors.add(nodes[id - 1]);
           }
         }
         return nodes[0];
       } else {
-        String inner = trimmed.substring(1, trimmed.length() - 1);
-        java.util.List<String> items = splitTopLevel(inner);
+        java.util.List<String> items = getArrayItems(trimmed);
         if (items.isEmpty()) return null;
         
         java.lang.reflect.Constructor<?> constructor = nodeClass.getConstructor(int.class);
@@ -476,14 +1180,13 @@ const getJavaMainWrapper = () => `public class Main {
         
         for (int i = 0; i < n; i++) {
           String pairRaw = items.get(i).trim();
-          String pairInner = pairRaw.substring(1, pairRaw.length() - 1);
-          java.util.List<String> pair = splitTopLevel(pairInner);
-          int val = Integer.parseInt(pair.get(0).trim());
+          java.util.List<String> pair = getArrayItems(pairRaw);
+          int val = parseIntLiteral(pair.get(0));
           nodes[i] = constructor.newInstance(val);
           
           String randStr = pair.get(1).trim();
-          if (!randStr.equals("null") && !randStr.isEmpty()) {
-            randomIndices[i] = Integer.parseInt(randStr);
+          if (!isNullLiteral(randStr) && !randStr.isEmpty()) {
+            randomIndices[i] = parseIntLiteral(randStr);
           }
         }
         
@@ -500,6 +1203,56 @@ const getJavaMainWrapper = () => `public class Main {
     } catch (Exception e) {
       e.printStackTrace();
       return null;
+    }
+  }
+
+  private static Object parseInterval(String raw) {
+    String trimmed = raw.trim();
+    if (isNullLiteral(trimmed)) return null;
+    java.util.List<String> items = getArrayItems(trimmed);
+    if (items.size() != 2) {
+      throw new IllegalArgumentException("Interval input must contain [start,end], received '" + raw + "'");
+    }
+    try {
+      Class<?> intervalClass = Class.forName("Interval");
+      try {
+        java.lang.reflect.Constructor<?> constructor = intervalClass.getConstructor(int.class, int.class);
+        return constructor.newInstance(parseIntLiteral(items.get(0)), parseIntLiteral(items.get(1)));
+      } catch (NoSuchMethodException ignored) {
+        Object interval = intervalClass.getDeclaredConstructor().newInstance();
+        intervalClass.getField("start").set(interval, parseIntLiteral(items.get(0)));
+        intervalClass.getField("end").set(interval, parseIntLiteral(items.get(1)));
+        return interval;
+      }
+    } catch (Exception error) {
+      throw new RuntimeException("Error parsing interval: " + error.getMessage(), error);
+    }
+  }
+
+  private static Object parseObject(String raw, Class<?> clazz) {
+    String trimmed = raw.trim();
+    if (isNullLiteral(trimmed)) return null;
+
+    if (looksLikeArray(trimmed)) {
+      Exception lastError = null;
+      for (java.lang.reflect.Constructor<?> constructor : clazz.getDeclaredConstructors()) {
+        try {
+          constructor.setAccessible(true);
+          Object[] args = parseArgumentGroup(constructor.getGenericParameterTypes(), trimmed);
+          return constructor.newInstance(args);
+        } catch (Exception error) {
+          lastError = error;
+        }
+      }
+      throw new IllegalArgumentException("Unable to construct " + clazz.getSimpleName() + " from " + raw + ": " + (lastError == null ? "no matching constructor" : lastError.getMessage()), lastError);
+    }
+
+    try {
+      java.lang.reflect.Constructor<?> stringConstructor = clazz.getDeclaredConstructor(String.class);
+      stringConstructor.setAccessible(true);
+      return stringConstructor.newInstance(unquote(trimmed));
+    } catch (Exception ignored) {
+      throw new IllegalArgumentException("Unsupported object input for " + clazz.getSimpleName() + ": '" + raw + "'");
     }
   }
 
@@ -634,6 +1387,18 @@ const getJavaMainWrapper = () => `public class Main {
       return "null";
     }
   }
+
+  private static String formatInterval(Object interval) {
+    if (interval == null) return "null";
+    try {
+      Class<?> intervalClass = interval.getClass();
+      Object start = intervalClass.getField("start").get(interval);
+      Object end = intervalClass.getField("end").get(interval);
+      return "[" + start + "," + end + "]";
+    } catch (Exception error) {
+      return interval.toString();
+    }
+  }
 }`;
 
 const prepareSourceFile = async ({
@@ -707,6 +1472,19 @@ class Node {
 `;
       }
     }
+    if (cleanCode.includes("Interval") && !/class\s+Interval\b/.test(codeWithoutComment)) {
+      helperClasses += `
+class Interval {
+    public int start;
+    public int end;
+    public Interval() {}
+    public Interval(int start, int end) {
+        this.start = start;
+        this.end = end;
+    }
+}
+`;
+    }
 
     if (useCustomMain) {
       processedCode = `${autoImports}\n\n${cleanCode}\n${wrapperCode}\n${helperClasses}`;
@@ -715,10 +1493,20 @@ class Node {
       const mainClassName = mainClassMatch ? mainClassMatch[1] : null;
       processedCode = `${autoImports}\n\n${mainClassName ? cleanCode.replace(new RegExp(`class\\s+${mainClassName}\\b`), "class Main") : cleanCode}\n${helperClasses}`;
     } else {
-      const hasSolutionClass = /class\s+Solution\b/.test(cleanCode);
-      const solutionClassReadyCode = hasSolutionClass
-        ? cleanCode
-        : cleanCode.replace(/class\s+[A-Za-z0-9_]+/, "class Solution");
+      let solutionClassReadyCode = cleanCode;
+      const allClassMatches = [...codeWithoutComment.matchAll(/class\s+([A-Za-z0-9_]+)\b/g)];
+      let mainClassMatch = allClassMatches.find(m => m[1]?.toLowerCase() === "solution");
+      if (!mainClassMatch) {
+        mainClassMatch = allClassMatches.find(m => m[1] !== undefined && !["listnode", "treenode", "node", "interval"].includes(m[1].toLowerCase()));
+      }
+      if (mainClassMatch?.[1]) {
+        const className = mainClassMatch[1];
+        if (className !== "Solution") {
+          solutionClassReadyCode = cleanCode.replace(new RegExp(`\\b${className}\\b`, "g"), "Solution");
+        }
+      } else {
+        solutionClassReadyCode = `class Solution {\n${cleanCode}\n}`;
+      }
       processedCode = `${autoImports}\n\n${solutionClassReadyCode}\n\n${getJavaMainWrapper()}\n${helperClasses}`;
     }
 
@@ -748,6 +1536,19 @@ class Node {
     }
   }
 
+  // Extract JSDoc param types
+  const paramRegex = /@param\s*\{([A-Za-z0-9_\[\]]+)\}/g;
+  const paramTypes: string[] = [];
+  let match;
+  while ((match = paramRegex.exec(wrapperCode || "")) !== null) {
+    if (match[1]) paramTypes.push(match[1]);
+  }
+  if (paramTypes.length === 0) {
+    while ((match = paramRegex.exec(code || "")) !== null) {
+      if (match[1]) paramTypes.push(match[1]);
+    }
+  }
+
   const finalWrapper = exportName && !wrapperCode.includes("module.exports")
     ? `\nmodule.exports = { ${exportName} };`
     : wrapperCode;
@@ -757,7 +1558,7 @@ class Node {
 
   if (exportName) {
     const runnerFile = "runner.js";
-    await fs.writeFile(path.join(tempDir, runnerFile), getJavaScriptRunner(exportName));
+    await fs.writeFile(path.join(tempDir, runnerFile), getJavaScriptRunner(exportName, paramTypes));
     return {
       dockerImage: "node:18-slim",
       runCommand: `node ${runnerFile}`,
@@ -853,6 +1654,94 @@ const getLevenshteinDistance = (a: string, b: string): number => {
   return previous[b.length] ?? 0;
 };
 
+const problemExecutionSelect = {
+  id: true,
+  name: true,
+  test_cases: true,
+  code_snippets: true,
+} as const;
+
+const getProblemBaseName = (fileName?: string | null) => {
+  const trimmed = fileName?.trim();
+  if (!trimmed) return null;
+
+  const leafName = trimmed.split(/[\\/]/).pop() || trimmed;
+  const querylessName = leafName.split("?")[0] || leafName;
+  const extensionIndex = querylessName.lastIndexOf(".");
+
+  return extensionIndex > 0 ? querylessName.slice(0, extensionIndex) : querylessName;
+};
+
+const getProblemNumber = (baseName: string) => {
+  const match = baseName.match(/leetcode[-_]?0*(\d+)/i) || baseName.match(/0*(\d+)/);
+  return match ? Number.parseInt(match[1] || match[0], 10) : null;
+};
+
+const findProblemForExecution = async (baseName: string) => {
+  const exactMatch = await prisma.problem.findFirst({
+    where: {
+      name: {
+        equals: baseName,
+        mode: "insensitive",
+      },
+    },
+    select: problemExecutionSelect,
+  });
+
+  if (exactMatch) {
+    return exactMatch;
+  }
+
+  const problemNum = getProblemNumber(baseName);
+  if (problemNum) {
+    const rawNumber = String(problemNum);
+    const paddedTwo = rawNumber.padStart(2, "0");
+    const paddedThree = rawNumber.padStart(3, "0");
+
+    const numberMatch = await prisma.problem.findFirst({
+      where: {
+        OR: [
+          { problem_number: problemNum },
+          { name: { startsWith: `LeetCode-${paddedTwo}`, mode: "insensitive" } },
+          { name: { startsWith: `LeetCode-${paddedThree}`, mode: "insensitive" } },
+          { name: { startsWith: `LeetCode-${rawNumber}`, mode: "insensitive" } },
+        ],
+      },
+      select: problemExecutionSelect,
+    });
+
+    if (numberMatch) {
+      return numberMatch;
+    }
+  }
+
+  const allProblems = await prisma.problem.findMany({
+    select: problemExecutionSelect,
+  });
+
+  const target = baseName.toLowerCase();
+  let bestMatch: (typeof allProblems)[number] | null = null;
+  let bestSimilarity = 0;
+
+  for (const problem of allProblems) {
+    const dbName = problem.name.toLowerCase();
+
+    if (dbName.includes(target) || target.includes(dbName)) {
+      return problem;
+    }
+
+    const distance = getLevenshteinDistance(target, dbName);
+    const similarity = 1 - distance / Math.max(target.length, dbName.length);
+
+    if (similarity > bestSimilarity && similarity >= 0.85) {
+      bestSimilarity = similarity;
+      bestMatch = problem;
+    }
+  }
+
+  return bestMatch;
+};
+
 const fetchAndCacheFileNames = async (): Promise<any[]> => {
   try {
     const rawData = await postGraphQL<any>({
@@ -905,7 +1794,7 @@ const fetchAndCacheFileNames = async (): Promise<any[]> => {
       };
     });
 
-    internalCache.set("getFilesNames", unifiedResponse, 10 * 60);
+    internalCache.set(EXECUTION_FILE_NAMES_CACHE_KEY, unifiedResponse, 10 * 60);
     return unifiedResponse;
   } catch (error) {
     console.error("Failed to dynamically fetch and cache file names in execution:", error);
@@ -914,10 +1803,11 @@ const fetchAndCacheFileNames = async (): Promise<any[]> => {
 };
 
 export const executeCode = async (req: Request, res: Response) => {
-  const { code, language, oid, mode, customInput } = req.body as ExecuteBody;
+  const { code, language, oid, mode, customInput, fileName } = req.body as ExecuteBody;
 
   const sourceCode = typeof code === "string" ? code : "";
   const githubOid = typeof oid === "string" ? oid.trim() : "";
+  const requestedBaseName = getProblemBaseName(typeof fileName === "string" ? fileName : null);
   const executionMode = getExecutionMode(mode);
   const executionLanguage = getLanguage(language);
   const customInputValue = typeof customInput === "string" ? customInput.trim() : "";
@@ -960,75 +1850,28 @@ export const executeCode = async (req: Request, res: Response) => {
   try {
     await fs.mkdir(tempDir, { recursive: true });
 
-    let fileData = await prisma.problem.findUnique({
-      where: { github_oid: githubOid },
-      select: {
-        id: true,
-        test_cases: true,
-        code_snippets: true,
-      },
-    });
+    let fileData = requestedBaseName && !githubOid.startsWith("local-")
+      ? await findProblemForExecution(requestedBaseName)
+      : null;
+
+    if (!fileData) {
+      fileData = await prisma.problem.findUnique({
+        where: { github_oid: githubOid },
+        select: problemExecutionSelect,
+      });
+    }
 
     if (!fileData) {
       // Fallback: search in cached filenames
-      let cachedFiles = internalCache.get<any[]>("getFilesNames");
+      let cachedFiles = internalCache.get<any[]>(EXECUTION_FILE_NAMES_CACHE_KEY);
       if (!cachedFiles || cachedFiles.length === 0) {
         cachedFiles = await fetchAndCacheFileNames();
       }
       const matchedFile = cachedFiles?.find((f) => f.oid === githubOid);
       if (matchedFile && typeof matchedFile.name === "string") {
-        const baseName = matchedFile.name.split(".")[0];
+        const baseName = getProblemBaseName(matchedFile.name);
         if (baseName) {
-          fileData = await prisma.problem.findFirst({
-            where: {
-              name: {
-                equals: baseName,
-                mode: "insensitive",
-              },
-            },
-            select: {
-              id: true,
-              test_cases: true,
-              code_snippets: true,
-            },
-          });
-
-          let bestMatch: any = null;
-          let bestSimilarity = 0;
-
-          if (!fileData) {
-            const allProblems = await prisma.problem.findMany({
-              select: {
-                id: true,
-                name: true,
-                test_cases: true,
-                code_snippets: true,
-              }
-            });
-
-            const target = baseName.toLowerCase();
-
-            for (const p of allProblems) {
-              const dbName = p.name.toLowerCase();
-
-              if (dbName.includes(target) || target.includes(dbName)) {
-                bestMatch = p;
-                break;
-              }
-
-              const distance = getLevenshteinDistance(target, dbName);
-              const similarity = 1 - distance / Math.max(target.length, dbName.length);
-
-              if (similarity > bestSimilarity && similarity >= 0.4) {
-                bestSimilarity = similarity;
-                bestMatch = p;
-              }
-            }
-
-            if (bestMatch) {
-              fileData = bestMatch;
-            }
-          }
+          fileData = await findProblemForExecution(baseName);
         }
       }
     }
@@ -1146,16 +1989,19 @@ export const executeCode = async (req: Request, res: Response) => {
     }
 
     const isFreeForm = testCases.length === 0 || useCustomInput;
+    const runtimeErrorResult = results.find((result) => result.runtimeError);
+    const passed = !runtimeErrorResult && (isFreeForm ? true : totalPassed === casesToRun.length);
+
     return res.json({
       mode: executionMode,
       totalCases: casesToRun.length,
-      passedCases: isFreeForm ? casesToRun.length : totalPassed,
-      passed: isFreeForm ? true : totalPassed === casesToRun.length,
-      status: isFreeForm ? "COMPLETED" : totalPassed === casesToRun.length ? "PASSED" : "FAILED",
+      passedCases: isFreeForm && !runtimeErrorResult ? casesToRun.length : totalPassed,
+      passed,
+      status: runtimeErrorResult ? "FAILED" : isFreeForm ? "COMPLETED" : totalPassed === casesToRun.length ? "PASSED" : "FAILED",
       problemId: isFreeForm ? "" : testCases[0]?.problemId || "",
       details: results,
-      error: results.find((r) => r.runtimeError)?.runtimeError || null,
-      execution_status: (isFreeForm || totalPassed === casesToRun.length) ? "SUCCESS" : 'ERROR',
+      error: runtimeErrorResult?.runtimeError || null,
+      execution_status: passed ? "SUCCESS" : 'ERROR',
     });
   } catch (error) {
     if (executionLanguage === "javascript" && isInProcessFallbackEnabled()) {
@@ -1398,16 +2244,19 @@ export const executeCode = async (req: Request, res: Response) => {
         }
 
         const isFreeForm = testCases.length === 0 || useCustomInput;
+        const runtimeErrorResult = localResults.find((result) => result.runtimeError);
+        const passed = !runtimeErrorResult && (isFreeForm ? true : localPassedCount === testCasesToRun.length);
+
         return res.json({
           mode: executionMode,
           totalCases: testCasesToRun.length,
-          passedCases: isFreeForm ? testCasesToRun.length : localPassedCount,
-          passed: isFreeForm ? true : localPassedCount === testCasesToRun.length,
-          status: isFreeForm ? "COMPLETED" : localPassedCount === testCasesToRun.length ? "PASSED" : "FAILED",
+          passedCases: isFreeForm && !runtimeErrorResult ? testCasesToRun.length : localPassedCount,
+          passed,
+          status: runtimeErrorResult ? "FAILED" : isFreeForm ? "COMPLETED" : localPassedCount === testCasesToRun.length ? "PASSED" : "FAILED",
           problemId: isFreeForm ? "" : testCases[0]?.problemId || "",
           details: localResults,
-          error: localResults.find((r) => r.runtimeError)?.runtimeError || null,
-          execution_status: (isFreeForm || localPassedCount === testCasesToRun.length) ? "SUCCESS" : 'ERROR',
+          error: runtimeErrorResult?.runtimeError || null,
+          execution_status: passed ? "SUCCESS" : 'ERROR',
         });
       } catch (sandboxErr) {
         const message = sandboxErr instanceof Error ? sandboxErr.message : "Sandbox crash";

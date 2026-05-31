@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { MenuIcon, Terminal, IdCardLanyard, X } from 'lucide-react'
+import { House, MenuIcon, Terminal, IdCardLanyard, X } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { UseHeadroom } from '../utils/styles/headRoom'
 
@@ -19,6 +19,10 @@ const Header = () => {
             </span>
          </Link>
                  <div className='hidden wmd:flex items-center space-x-6'>
+            <Link to="/" className='flex items-center gap-1.5 text-slate-400 hover:text-cyan-400 transition-colors duration-200 uppercase tracking-wider'>
+               <House className='w-3.5 h-3.5' />
+               <span>[ HOME ]</span>
+            </Link>
             <Link to="/terminal" className='text-slate-400 hover:text-cyan-400 transition-colors duration-200 uppercase tracking-wider'>[ TERMINAL ]</Link>
             <Link to="/about" className='text-slate-400 hover:text-cyan-400 transition-colors duration-200 uppercase tracking-wider'>[ ABOUT_&_FC ]</Link>
             <a href="https://github.com/Devsharma08/ONLINE_IDE" target="_blank" rel="noreferrer" className='flex items-center gap-2 px-3 py-1.5 bg-cyan-950/10 hover:bg-cyan-950/20 border border-cyan-500/30 hover:border-cyan-400 rounded-none transition-all duration-300 text-cyan-400 uppercase tracking-wider'>
@@ -38,6 +42,10 @@ const Header = () => {
       </div>
       {isMenuOpen ? (
          <div className="wmd:hidden mx-auto mt-4 grid max-w-7xl gap-1.5 border-t border-white/5 pt-4 text-xs font-mono">
+            <Link to="/" onClick={() => setIsMenuOpen(false)} className='flex items-center gap-2 rounded-none px-3 py-2 text-slate-400 hover:bg-cyan-950/5 hover:text-cyan-400 border border-transparent hover:border-cyan-500/20 transition-all uppercase'>
+               <House className='w-3.5 h-3.5' />
+               <span>[ HOME ]</span>
+            </Link>
             <Link to="/terminal" onClick={() => setIsMenuOpen(false)} className='rounded-none px-3 py-2 text-slate-400 hover:bg-cyan-950/5 hover:text-cyan-400 border border-transparent hover:border-cyan-500/20 transition-all uppercase'>[ TERMINAL ]</Link>
             <Link to="/about" onClick={() => setIsMenuOpen(false)} className='rounded-none px-3 py-2 text-slate-400 hover:bg-cyan-950/5 hover:text-cyan-400 border border-transparent hover:border-cyan-500/20 transition-all uppercase'>[ ABOUT ]</Link>
             <a href="https://github.com/Devsharma08/ONLINE_IDE" target="_blank" rel="noreferrer" className='flex items-center gap-2 rounded-none px-3 py-2 text-slate-400 hover:bg-cyan-950/5 hover:text-cyan-400 border border-transparent hover:border-cyan-500/20 transition-all uppercase'>
